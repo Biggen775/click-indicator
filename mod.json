@@ -1,0 +1,147 @@
+{
+	"geode": "5.11.2",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081"
+	},
+	"id": "brittj.click-indicator",
+	"name": "Click Indicator",
+	"version": "v1.0.0",
+	"developer": "brittj",
+	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
+	"tags": ["gameplay", "utility"],
+	"settings": {
+		"enabled": {
+			"type": "bool",
+			"name": "Enabled",
+			"description": "Turn the whole mod on or off.",
+			"default": true
+		},
+		"macro-title": {
+			"type": "title",
+			"name": "Macro"
+		},
+		"macro-folder": {
+			"type": "folder",
+			"name": "Macro Folder",
+			"description": "Put macro files here. A file is used automatically when its name matches the <cy>level ID</c> or <cy>level name</c> (for example <cg>12345.gdr</c> or <cg>Bloodbath.gdr.json</c>).",
+			"default": "{mod_config_dir}/macros"
+		},
+		"macro-file": {
+			"type": "file",
+			"name": "Fallback Macro File",
+			"description": "Used when no file in the macro folder matches the level. Supports <cg>.gdr</c>, <cg>.gdr.json</c>, <cg>.gdr2</c> and JSON macros.",
+			"default": "Pick a macro file",
+			"control": {
+				"dialog": "open",
+				"filters": [
+					{
+						"description": "Macro files",
+						"files": ["*.gdr", "*.gdr2", "*.json"]
+					}
+				]
+			}
+		},
+		"offset-ms": {
+			"type": "float",
+			"name": "Timing Offset (ms)",
+			"description": "Shifts every click earlier (negative) or later (positive) if the bars look slightly off.",
+			"default": 0,
+			"min": -200,
+			"max": 200,
+			"control": { "slider": true, "slider-step": 1 }
+		},
+		"only-practice": {
+			"type": "bool",
+			"name": "Only In Practice Mode",
+			"default": false
+		},
+		"level-title": {
+			"type": "title",
+			"name": "Level Bars"
+		},
+		"show-bars": {
+			"type": "bool",
+			"name": "Show Click Bars",
+			"description": "Green bars in the level where each click happens. Thin line = tap, wide bar = hold.",
+			"default": true
+		},
+		"show-hit-line": {
+			"type": "bool",
+			"name": "Show Hit Line",
+			"description": "The vertical line that follows the player.",
+			"default": true
+		},
+		"show-markers": {
+			"type": "bool",
+			"name": "Show Click Markers",
+			"description": "Small squares on each bar at the player's height.",
+			"default": true
+		},
+		"hide-passed": {
+			"type": "bool",
+			"name": "Hide Passed Clicks",
+			"description": "Only draw clicks that are still ahead of the player.",
+			"default": true
+		},
+		"bar-color": {
+			"type": "rgba",
+			"name": "Bar Color (Player 1)",
+			"default": "#2BFF7A50"
+		},
+		"p2-color": {
+			"type": "rgba",
+			"name": "Bar Color (Player 2)",
+			"default": "#FF5AD250"
+		},
+		"line-color": {
+			"type": "rgba",
+			"name": "Hit Line Color",
+			"default": "#FFFFFFB4"
+		},
+		"lane-title": {
+			"type": "title",
+			"name": "Rhythm Lane"
+		},
+		"show-lane": {
+			"type": "bool",
+			"name": "Show Rhythm Lane",
+			"description": "The osu!mania-style lane on the side of the screen.",
+			"default": true
+		},
+		"lane-side": {
+			"type": "string",
+			"name": "Lane Side",
+			"default": "Left",
+			"one-of": ["Left", "Right"]
+		},
+		"lane-speed": {
+			"type": "float",
+			"name": "Lane Scroll Speed",
+			"description": "How fast notes fall in the lane (pixels per second).",
+			"default": 260,
+			"min": 80,
+			"max": 900,
+			"control": { "slider": true, "slider-step": 10 }
+		},
+		"lane-scale": {
+			"type": "float",
+			"name": "Lane Size",
+			"default": 1.0,
+			"min": 0.5,
+			"max": 2.0,
+			"control": { "slider": true, "slider-step": 0.05 }
+		},
+		"lane-color": {
+			"type": "rgba",
+			"name": "Lane Color",
+			"default": "#2BFF7AFF"
+		},
+		"show-judgments": {
+			"type": "bool",
+			"name": "Show Timing Judgments",
+			"description": "Compares your clicks to the macro and shows PERFECT / GREAT / GOOD / MISS with the offset in milliseconds.",
+			"default": true
+		}
+	}
+}
