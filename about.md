@@ -5,6 +5,7 @@ Shows the clicks from a macro (replay) file while you play, osu!mania style:
 - **Click bars** in the level: a thin line is a tap, a wide green bar is a hold.
 - **Hit line** that follows your player.
 - **Rhythm lane** on the side with falling notes and a receptor that lights up when you click.
+- **Aim Assist** (optional): early clicks are lined up with the macro, strength 1-10. Safe Mode keeps it from saving progress.
 - **Timing judgments** (PERFECT / GREAT / GOOD / MISS) comparing your clicks to the macro.
 
 ## How to use

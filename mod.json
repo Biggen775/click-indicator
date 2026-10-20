@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v1.1.0",
+	"version": "v1.2.0",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -122,6 +122,34 @@
 			"type": "rgba",
 			"name": "Hit Line Color",
 			"default": "#FFFFFFB4"
+		},
+		"assist-title": {
+			"type": "title",
+			"name": "Aim Assist"
+		},
+		"assist-enabled": {
+			"type": "bool",
+			"name": "Aim Assist",
+			"description": "If you click or release <cy>early</c>, the click is held back and sent at the exact moment the macro clicked. Late clicks go through normally.",
+			"default": false
+		},
+		"assist-strength": {
+			"type": "int",
+			"name": "Assist Strength",
+			"description": "How early you can be and still get lined up. <cg>1</c> = 1 ms, <cg>5</c> = about 22 ms, <cg>7</c> = 100 ms, <cr>10</c> = a full second.",
+			"default": 5,
+			"min": 1,
+			"max": 10,
+			"control": {
+				"slider": true,
+				"slider-step": 1
+			}
+		},
+		"assist-safe-mode": {
+			"type": "bool",
+			"name": "Safe Mode With Assist",
+			"description": "While aim assist is on, the level runs like a start-pos test, so no percentage or completion is saved.",
+			"default": true
 		},
 		"lane-title": {
 			"type": "title",
