@@ -3,6 +3,7 @@
 #include <Geode/Geode.hpp>
 #include "Macro.hpp"
 
+#include <functional>
 #include <optional>
 
 // Draws the hit line, the click bars and the osu!mania-style lane on top of PlayLayer.
@@ -21,6 +22,17 @@ public:
 
     // Re-read the mod settings (called on reset and when the in-game menu changes something)
     void loadSettings();
+
+    // ---- Aim assist ----
+    // Is the assist on and usable in this level right now?
+    bool assistActive(PlayLayer* pl) const;
+    // Real press / release from the player. Returns true if the input should be held back.
+    bool assistOnPress(PlayLayer* pl, bool p2);
+    bool assistOnRelease(PlayLayer* pl, bool p2);
+    // Called every game tick: fires held-back inputs when their macro time arrives.
+    void assistTick(PlayLayer* pl, std::function<void(bool down, bool p2)> const& fire);
+    // Assist window in seconds for a strength of 1..10
+    static double assistWindowFor(int strength);
 
 protected:
     bool init(Macro macro);
@@ -56,6 +68,16 @@ private:
     size_t m_missCursor = 0;
     bool m_onlyPractice = false;
     bool m_enabled = true;
+
+    struct AssistState {
+        std::optional<double> pressAt;   // held-back press, fires at this macro time
+        std::optional<double> releaseAt; // held-back release
+        int active = -1;                 // macro press this click was matched to
+        int lastUsed = -1;               // so one macro click isn't matched twice
+    };
+    AssistState m_assist[2];
+    bool m_assistOn = false;
+    double m_assistWindow = 0.02;
     bool m_held[2] = {false, false};
     bool m_needResync = true;
     float m_judgeTimer = 0.f;

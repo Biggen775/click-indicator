@@ -21,8 +21,11 @@ protected:
 private:
     cocos2d::CCMenu* m_menu = nullptr;
     cocos2d::CCLabelBMFont* m_status = nullptr;
+    cocos2d::CCLabelBMFont* m_strengthLabel = nullptr;
 
     void addToggle(char const* text, char const* settingKey, cocos2d::CCPoint pos, char const* info);
     void addLaneSideToggle(cocos2d::CCPoint pos);
     void updateStatus();
+    void addStrengthRow(float y);
+    void updateStrength();
 };

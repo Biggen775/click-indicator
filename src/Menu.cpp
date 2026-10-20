@@ -1,5 +1,6 @@
 #include "Menu.hpp"
 #include "Shared.hpp"
+#include "Overlay.hpp"
 
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/utils/file.hpp>
@@ -10,7 +11,7 @@ namespace {
     ClickMenu* s_openMenu = nullptr;
 
     constexpr float kWidth = 400.f;
-    constexpr float kHeight = 270.f;
+    constexpr float kHeight = 296.f;
 }
 
 ClickMenu* ClickMenu::create() {
@@ -58,8 +59,8 @@ bool ClickMenu::init() {
     // Two columns of checkboxes, like the in-game options
     float leftX = 34.f;
     float rightX = kWidth / 2.f + 22.f;
-    float top = kHeight - 62.f;
-    float step = 33.f;
+    float top = kHeight - 56.f;
+    float step = 30.f;
 
     this->addToggle("Enabled", "enabled", {leftX, top}, "Turns the whole click indicator on or off.");
     this->addToggle("Click Bars", "show-bars", {leftX, top - step}, "Green bars in the level where each click happens. Thin line = tap, wide bar = hold.");
@@ -71,10 +72,13 @@ bool ClickMenu::init() {
     this->addToggle("Judgments", "show-judgments", {rightX, top - step}, "Shows PERFECT / GREAT / GOOD / MISS and how many ms early or late you clicked.");
     this->addLaneSideToggle({rightX, top - step * 2});
     this->addToggle("Practice Only", "only-practice", {rightX, top - step * 3}, "Only show the indicator in practice mode.");
+    this->addToggle("Aim Assist", "assist-enabled", {rightX, top - step * 4}, "If you click or release EARLY, your click is held back and sent at the exact moment the macro clicked. Late clicks go through normally. With Safe Mode on (in Settings), progress isn't saved while it's on.");
+
+    this->addStrengthRow(top - step * 5 + 2.f);
 
     // Macro status
     m_status = CCLabelBMFont::create("", "chatFont.fnt");
-    m_status->setPosition({kWidth / 2.f, 58.f});
+    m_status->setPosition({kWidth / 2.f, 60.f});
     m_mainLayer->addChild(m_status, 10);
     this->updateStatus();
 
@@ -159,6 +163,44 @@ void ClickMenu::addLaneSideToggle(CCPoint pos) {
     label->setPosition({pos.x + 20.f, pos.y});
     label->limitLabelWidth(125.f, 0.5f, 0.2f);
     m_mainLayer->addChild(label, 10);
+}
+
+void ClickMenu::addStrengthRow(float y) {
+    auto title = CCLabelBMFont::create("Assist Strength", "bigFont.fnt");
+    title->setScale(0.45f);
+    title->setPosition({kWidth / 2.f - 70.f, y});
+    m_mainLayer->addChild(title, 10);
+
+    m_strengthLabel = CCLabelBMFont::create("", "bigFont.fnt");
+    m_strengthLabel->setPosition({kWidth / 2.f + 90.f, y});
+    m_mainLayer->addChild(m_strengthLabel, 10);
+
+    auto makeArrow = [this, y](bool right) {
+        auto spr = CCSprite::createWithSpriteFrameName("navArrowBtn_001.png");
+        spr->setScale(0.45f);
+        if (!right) spr->setFlipX(true);
+        auto btn = CCMenuItemExt::createSpriteExtra(spr, [this, right](auto) {
+            auto mod = Mod::get();
+            int64_t v = mod->getSettingValue<int64_t>("assist-strength") + (right ? 1 : -1);
+            v = std::clamp<int64_t>(v, 1, 10);
+            mod->setSettingValue<int64_t>("assist-strength", v);
+            refreshOverlaySettings();
+            this->updateStrength();
+        });
+        btn->setPosition({kWidth / 2.f + 90.f + (right ? 52.f : -52.f), y});
+        m_menu->addChild(btn);
+    };
+    makeArrow(false);
+    makeArrow(true);
+    this->updateStrength();
+}
+
+void ClickMenu::updateStrength() {
+    if (!m_strengthLabel) return;
+    int64_t v = Mod::get()->getSettingValue<int64_t>("assist-strength");
+    double ms = ClickOverlay::assistWindowFor(static_cast<int>(v)) * 1000.0;
+    m_strengthLabel->setString(fmt::format("{} ({:.0f}ms)", v, ms).c_str());
+    m_strengthLabel->limitLabelWidth(80.f, 0.45f, 0.2f);
 }
 
 void ClickMenu::updateStatus() {

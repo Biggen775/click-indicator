@@ -86,7 +86,26 @@ class $modify(CIPlayLayer, PlayLayer) {
     struct Fields {
         Ref<ClickOverlay> overlay;
         std::string lastError;
+        bool forcedTestMode = false;
+        bool savedTestMode = false;
     };
+
+    // Safe mode: while the aim assist is on, run the level like a start-pos test so no progress is saved
+    void updateSafeMode() {
+        auto fields = m_fields.self();
+        auto mod = Mod::get();
+        bool want = fields->overlay && mod->getSettingValue<bool>("enabled") &&
+            mod->getSettingValue<bool>("assist-enabled") && mod->getSettingValue<bool>("assist-safe-mode");
+        if (want && !fields->forcedTestMode) {
+            fields->savedTestMode = m_isTestMode;
+            fields->forcedTestMode = true;
+            m_isTestMode = true;
+        }
+        else if (!want && fields->forcedTestMode) {
+            fields->forcedTestMode = false;
+            m_isTestMode = fields->savedTestMode;
+        }
+    }
 
     // Finds and loads a macro for this level. Replaces the current overlay.
     bool loadMacroOverlay(bool notify) {
@@ -131,6 +150,7 @@ class $modify(CIPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
         this->loadMacroOverlay(true);
+        this->updateSafeMode();
         return true;
     }
 
@@ -146,6 +166,7 @@ class $modify(CIPlayLayer, PlayLayer) {
         if (auto overlay = m_fields->overlay) {
             overlay->onReset();
         }
+        this->updateSafeMode();
     }
 };
 
@@ -154,13 +175,16 @@ void refreshOverlaySettings() {
         if (auto overlay = static_cast<CIPlayLayer*>(pl)->m_fields->overlay) {
             overlay->loadSettings();
         }
+        static_cast<CIPlayLayer*>(pl)->updateSafeMode();
     }
 }
 
 bool reloadMacroForCurrentLevel() {
     auto pl = PlayLayer::get();
     if (!pl) return false;
-    return static_cast<CIPlayLayer*>(pl)->loadMacroOverlay(true);
+    bool ok = static_cast<CIPlayLayer*>(pl)->loadMacroOverlay(true);
+    static_cast<CIPlayLayer*>(pl)->updateSafeMode();
+    return ok;
 }
 
 std::string macroStatusText() {
@@ -175,17 +199,46 @@ std::string macroStatusText() {
     return "No macro found for this level";
 }
 
+namespace {
+    // true while the aim assist is sending a held-back click, so it isn't processed twice
+    bool s_assistFiring = false;
+}
+
 class $modify(CIBaseGameLayer, GJBaseGameLayer) {
+    ClickOverlay* overlayIfPlayLayer() {
+        auto pl = PlayLayer::get();
+        if (!pl || static_cast<GJBaseGameLayer*>(pl) != this) return nullptr;
+        return static_cast<CIPlayLayer*>(pl)->m_fields->overlay;
+    }
+
     void handleButton(bool down, int button, bool isPlayer1) {
-        GJBaseGameLayer::handleButton(down, button, isPlayer1);
-        if (button != 1) return; // jump only
+        auto overlay = button == 1 && !s_assistFiring ? this->overlayIfPlayLayer() : nullptr;
+        if (!overlay) {
+            GJBaseGameLayer::handleButton(down, button, isPlayer1);
+            return;
+        }
 
         auto pl = PlayLayer::get();
-        if (!pl || static_cast<GJBaseGameLayer*>(pl) != this) return;
+        bool p2 = !isPlayer1;
 
-        if (auto overlay = static_cast<CIPlayLayer*>(pl)->m_fields->overlay) {
-            overlay->onPlayerInput(pl, down, !isPlayer1);
+        // judge the real click (before any assist), so you see how far off you really were
+        overlay->onPlayerInput(pl, down, p2);
+
+        bool holdBack = down ? overlay->assistOnPress(pl, p2) : overlay->assistOnRelease(pl, p2);
+        if (!holdBack) {
+            GJBaseGameLayer::handleButton(down, button, isPlayer1);
         }
+    }
+
+    void processCommands(float dt, bool isHalfTick, bool isLastTick) {
+        if (auto overlay = this->overlayIfPlayLayer()) {
+            overlay->assistTick(PlayLayer::get(), [this](bool down, bool p2) {
+                s_assistFiring = true;
+                this->handleButton(down, 1, !p2);
+                s_assistFiring = false;
+            });
+        }
+        GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
     }
 };
 
