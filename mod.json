@@ -6,16 +6,33 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v1.0.0",
+	"version": "v1.1.0",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
-	"tags": ["gameplay", "utility"],
+	"tags": [
+		"gameplay",
+		"utility"
+	],
 	"settings": {
 		"enabled": {
 			"type": "bool",
 			"name": "Enabled",
 			"description": "Turn the whole mod on or off.",
 			"default": true
+		},
+		"menu-key": {
+			"type": "string",
+			"name": "Menu Hotkey",
+			"description": "Key that opens the Click Indicator menu from anywhere, even mid-level (the level pauses). You can also use the button in the pause menu.",
+			"default": "F8",
+			"one-of": [
+				"F8",
+				"F9",
+				"F10",
+				"Tab",
+				"Insert",
+				"None"
+			]
 		},
 		"macro-title": {
 			"type": "title",
@@ -37,7 +54,11 @@
 				"filters": [
 					{
 						"description": "Macro files",
-						"files": ["*.gdr", "*.gdr2", "*.json"]
+						"files": [
+							"*.gdr",
+							"*.gdr2",
+							"*.json"
+						]
 					}
 				]
 			}
@@ -49,7 +70,10 @@
 			"default": 0,
 			"min": -200,
 			"max": 200,
-			"control": { "slider": true, "slider-step": 1 }
+			"control": {
+				"slider": true,
+				"slider-step": 1
+			}
 		},
 		"only-practice": {
 			"type": "bool",
@@ -113,7 +137,10 @@
 			"type": "string",
 			"name": "Lane Side",
 			"default": "Left",
-			"one-of": ["Left", "Right"]
+			"one-of": [
+				"Left",
+				"Right"
+			]
 		},
 		"lane-speed": {
 			"type": "float",
@@ -122,7 +149,10 @@
 			"default": 260,
 			"min": 80,
 			"max": 900,
-			"control": { "slider": true, "slider-step": 10 }
+			"control": {
+				"slider": true,
+				"slider-step": 10
+			}
 		},
 		"lane-scale": {
 			"type": "float",
@@ -130,7 +160,10 @@
 			"default": 1.0,
 			"min": 0.5,
 			"max": 2.0,
-			"control": { "slider": true, "slider-step": 0.05 }
+			"control": {
+				"slider": true,
+				"slider-step": 0.05
+			}
 		},
 		"lane-color": {
 			"type": "rgba",
@@ -143,5 +176,10 @@
 			"description": "Compares your clicks to the macro and shows PERFECT / GREAT / GOOD / MISS with the offset in milliseconds.",
 			"default": true
 		}
+	},
+	"resources": {
+		"sprites": [
+			"resources/*.png"
+		]
 	}
 }
