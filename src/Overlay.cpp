@@ -85,6 +85,7 @@ void ClickOverlay::loadSettings() {
     m_set.lineColor = toColor4F(mod->getSettingValue<ccColor4B>("line-color"));
     m_set.laneColor = toColor4F(mod->getSettingValue<ccColor4B>("lane-color"));
     m_onlyPractice = mod->getSettingValue<bool>("only-practice");
+    m_enabled = mod->getSettingValue<bool>("enabled");
 }
 
 // ---------------------------------------------------------------------------
@@ -257,7 +258,7 @@ void ClickOverlay::showJudgment(char const* text, ccColor3B color, std::optional
 // ---------------------------------------------------------------------------
 
 void ClickOverlay::refresh(PlayLayer* pl, float dt) {
-    bool visible = !m_onlyPractice || pl->m_isPracticeMode;
+    bool visible = m_enabled && (!m_onlyPractice || pl->m_isPracticeMode);
     this->setVisible(visible);
     if (!visible) return;
 

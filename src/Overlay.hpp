@@ -19,6 +19,9 @@ public:
 
     Macro const& getMacro() const { return m_macro; }
 
+    // Re-read the mod settings (called on reset and when the in-game menu changes something)
+    void loadSettings();
+
 protected:
     bool init(Macro macro);
 
@@ -52,13 +55,13 @@ private:
     double m_now = 0.0;
     size_t m_missCursor = 0;
     bool m_onlyPractice = false;
+    bool m_enabled = true;
     bool m_held[2] = {false, false};
     bool m_needResync = true;
     float m_judgeTimer = 0.f;
     float m_receptorFlash[2] = {0.f, 0.f};
     cocos2d::ccColor4F m_flashColor[2]{};
 
-    void loadSettings();
     void prepare(PlayLayer* pl);
     float xForTime(double t) const;
     double timeForX(float x) const;
