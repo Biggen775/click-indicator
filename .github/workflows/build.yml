@@ -33,10 +33,19 @@ jobs:
     needs: ['build']
 
     steps:
+      - uses: actions/checkout@v7
+
+      # Name the download after the mod and its version, e.g. "Click-Indicator-v1.2.2"
+      - name: Read mod name and version
+        run: |
+          NAME=$(jq -r '.name' mod.json | tr ' ' '-')
+          VERSION=$(jq -r '.version' mod.json)
+          echo "ARTIFACT_NAME=${NAME}-${VERSION}" >> "$GITHUB_ENV"
+
       - uses: geode-sdk/build-geode-mod/combine@main
         id: build
 
       - uses: actions/upload-artifact@v7
         with:
-          name: Build Output
+          name: ${{ env.ARTIFACT_NAME }}
           path: ${{ steps.build.outputs.build-output }}
