@@ -81,9 +81,9 @@ private:
         bool showBars, showHitLine, showMarkers, hidePassed;
         bool showLane, laneRight, laneHorizontal, showJudgments;
         bool assistFlash, troubleSpots, tickPress, tickRelease;
-        bool offsetTrail, countdown, timeline, countIn, autoplay;
+        bool offsetTrail, countdown, timeline, countIn, autoplay, cueSound;
         float laneLookahead, laneScale, offset, hideAfterPercent, laneGap;
-        float tickVolume, autoplaySpeed;
+        float tickVolume, autoplaySpeed, cueLead;
         float sectionStart, sectionEnd;
         double perfectMs, greatMs, goodMs;
         int troubleThreshold;
@@ -113,6 +113,7 @@ private:
     double m_now = 0.0;
     size_t m_missCursor = 0;
     size_t m_tickCursor = 0;
+    size_t m_cueCursor = 0;
     bool m_onlyPractice = false;
     bool m_enabled = true;
 

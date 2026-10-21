@@ -319,6 +319,7 @@ void ClickMenu::buildPage() {
         this->addNumberRow(m_pageNode, menu, "Section End %", "section-end", 0, 100, 1, {rightX + 60.f, top - step * 3.f}, nullptr, "%");
         this->addLabel(m_pageNode, "End 0 or 100 = play to the end", {rightX + 60.f, top - step * 4.1f}, 0.4f);
         this->addToggle(m_pageNode, menu, "Timeline", "timeline", {rightX, top - step * 5.f}, "A thin bar across the top with every click as a tick mark (red = trouble spot), your position, and the section markers.");
+        this->addToggle(m_pageNode, menu, "Pre-Click Cue", "cue-sound", {rightX, top - step * 6.f}, "Plays a heads-up sound a little BEFORE each click, so you know one is coming. Set how early in Settings (Cue Lead, default 150 ms). Volume follows the Tick Volume slider.");
     }
     else {
         // Tools: recording + stats

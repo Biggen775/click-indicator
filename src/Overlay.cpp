@@ -125,6 +125,8 @@ void ClickOverlay::loadSettings() {
     m_set.tickPress = mod->getSettingValue<bool>("tick-sound");
     m_set.tickRelease = mod->getSettingValue<bool>("tick-release");
     m_set.tickVolume = static_cast<float>(mod->getSettingValue<double>("tick-volume"));
+    m_set.cueSound = mod->getSettingValue<bool>("cue-sound");
+    m_set.cueLead = static_cast<float>(mod->getSettingValue<int64_t>("cue-lead-ms")) / 1000.f;
     m_set.assistFlash = mod->getSettingValue<bool>("assist-flash");
     m_set.offsetTrail = mod->getSettingValue<bool>("offset-trail");
     m_set.countdown = mod->getSettingValue<bool>("countdown");
@@ -535,6 +537,8 @@ void ClickOverlay::resync() {
     // ticks: start from the first press that is still ahead
     m_tickCursor = 0;
     while (m_tickCursor < m_macro.presses.size() && m_macro.presses[m_tickCursor].start <= m_now) m_tickCursor++;
+    m_cueCursor = 0;
+    while (m_cueCursor < m_macro.presses.size() && m_macro.presses[m_cueCursor].start - m_set.cueLead <= m_now) m_cueCursor++;
     if (m_curOffsets.size() != m_macro.presses.size()) m_curOffsets.assign(m_macro.presses.size(), 9999.f);
     this->setupCountIn();
 }
@@ -557,9 +561,23 @@ void ClickOverlay::updateMisses() {
 void ClickOverlay::playTicks() {
     static std::string s_tickPath;
     static std::string s_tickUpPath;
+    static std::string s_cuePath;
     if (s_tickPath.empty()) {
         s_tickPath = utils::string::pathToString(Mod::get()->getResourcesDir() / "tick.ogg");
         s_tickUpPath = utils::string::pathToString(Mod::get()->getResourcesDir() / "tick-up.ogg");
+        s_cuePath = utils::string::pathToString(Mod::get()->getResourcesDir() / "cue.ogg");
+    }
+    // pre-click cue: a heads-up sound a little before each press
+    if (m_set.cueSound) {
+        auto& ps = m_macro.presses;
+        int cued = 0;
+        while (m_cueCursor < ps.size() && ps[m_cueCursor].start - m_set.cueLead <= m_now) {
+            if (ps[m_cueCursor].start - m_set.cueLead > m_now - 0.25 && cued < 4) {
+                FMODAudioEngine::sharedEngine()->playEffect(s_cuePath, 1.f, 0.f, m_set.tickVolume);
+                cued++;
+            }
+            m_cueCursor++;
+        }
     }
     // count-in beats before the first click
     while (m_countInCursor < m_countIn.size() && m_countIn[m_countInCursor] <= m_now) {
