@@ -209,12 +209,8 @@ double ClickOverlay::timeForX(float x) const {
 }
 
 double ClickOverlay::currentTime(PlayLayer* pl) {
-    // Normal play and practice: use the game's tick counter, the same frame number macro bots
-    // record, so timing matches the macro exactly (checkpoints restore it too).
-    if (!pl->m_startPosObject) {
-        return static_cast<double>(pl->m_gameState.m_currentProgress) / m_macro.framerate;
-    }
-    // From a start position the tick counter starts at 0 there, so go by where the player is
+    // Go by where the player is in the level (matches the bars exactly). The game's
+    // tick counter turned out not to track macro frames, so it is no longer used.
     if (m_usePositions && pl->m_player1) {
         return this->timeForX(pl->m_player1->getPositionX());
     }
