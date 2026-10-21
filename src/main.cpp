@@ -230,7 +230,9 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         }
     }
 
-    void processCommands(float dt, bool isHalfTick, bool isLastTick) {
+    // Sends held-back assist clicks that are due on this tick
+    void fireAssist() {
+        if (s_assistFiring) return;
         if (auto overlay = this->overlayIfPlayLayer()) {
             overlay->assistTick(PlayLayer::get(), [this](bool down, bool p2) {
                 s_assistFiring = true;
@@ -238,6 +240,18 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
                 s_assistFiring = false;
             });
         }
+    }
+
+    // Right before the game reads its input queue, so a held-back click is applied on this
+    // same tick instead of the next one
+    void processQueuedButtons(float dt, bool clearInputQueue) {
+        this->fireAssist();
+        GJBaseGameLayer::processQueuedButtons(dt, clearInputQueue);
+    }
+
+    // Backup in case the queue isn't read on a tick
+    void processCommands(float dt, bool isHalfTick, bool isLastTick) {
+        this->fireAssist();
         GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
     }
 };
