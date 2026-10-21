@@ -108,92 +108,25 @@ bool ClickOverlay::assistActive(PlayLayer* pl) const {
 
 bool ClickOverlay::assistOnPress(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
-    if (!this->assistActive(pl)) {
-        a = AssistState{a.pressAt, a.releaseAt, -1, a.lastUsed};
-        return false;
-    }
-
-    // Pressed again while a held-back release is waiting: the game is still holding, keep it that way
-    if (a.releaseAt) {
-        a.releaseAt.reset();
-        return true;
-    }
-    if (a.pressAt) return true;
-
-    double now = this->currentTime(pl);
-    auto const& presses = m_macro.presses;
-
-    // Nearest unused macro click for this player inside the window
-    int best = -1;
-    double bestDist = 0.0;
-    auto it = std::lower_bound(presses.begin(), presses.end(), now - m_assistWindow, [](Press const& p, double t) {
-        return p.start < t;
-    });
-    for (; it != presses.end() && it->start <= now + m_assistWindow; ++it) {
-        int idx = static_cast<int>(it - presses.begin());
-        if (it->p2 != p2 || idx <= a.lastUsed) continue;
-        double dist = std::abs(it->start - now);
-        if (best < 0 || dist < bestDist) {
-            best = idx;
-            bestDist = dist;
-        }
-    }
-
-    if (best < 0) {
-        a.active = -1;
-        return false; // nothing to line up with: normal click
-    }
-
-    a.active = best;
-    a.lastUsed = best;
-    double start = presses[best].start;
-    if (start - now > 0.002) {
-        a.pressAt = start; // early: hold the click until the macro's moment
-        return true;
-    }
-    return false; // on time or late: let it through now
+    if (!this->assistActive(pl) && !a.hasQueued()) return false;
+    return a.onPress(m_macro.presses, p2, this->currentTime(pl), this->assistActive(pl) ? m_assistWindow : 0.0);
 }
 
 bool ClickOverlay::assistOnRelease(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
-    if (!this->assistActive(pl) || a.active < 0 || a.active >= static_cast<int>(m_macro.presses.size())) {
-        a.active = -1;
-        return false;
-    }
-
-    double end = m_macro.presses[a.active].end;
-
-    // The press itself hasn't fired yet: release right after the macro's release
-    if (a.pressAt) {
-        a.releaseAt = std::max(end, *a.pressAt + 0.001);
-        return true;
-    }
-
-    double now = this->currentTime(pl);
-    if (end - now > 0.002 && end - now <= m_assistWindow) {
-        a.releaseAt = end; // released early: hold it until the macro lets go
-        return true;
-    }
-    a.active = -1;
-    return false;
+    if (!this->assistActive(pl) && !a.hasQueued()) return false;
+    return a.onRelease(m_macro.presses, this->currentTime(pl), this->assistActive(pl) ? m_assistWindow : 0.0);
 }
 
 void ClickOverlay::assistTick(PlayLayer* pl, std::function<void(bool, bool)> const& fire) {
     bool active = this->assistActive(pl);
     for (int p = 0; p < 2; p++) {
         auto& a = m_assist[p];
-        if (!a.pressAt && !a.releaseAt) continue;
-
-        double now = active ? this->currentTime(pl) : 1e300; // assist turned off: flush everything now
-        if (a.pressAt && now >= *a.pressAt) {
-            a.pressAt.reset();
-            fire(true, p == 1);
-        }
-        if (!a.pressAt && a.releaseAt && now >= *a.releaseAt) {
-            a.releaseAt.reset();
-            a.active = -1;
-            fire(false, p == 1);
-        }
+        if (!a.hasQueued()) continue;
+        bool p2 = p == 1;
+        auto send = [&](bool down) { fire(down, p2); };
+        if (active) a.tick(this->currentTime(pl), send);
+        else a.flush(send); // assist turned off mid-level: send what's waiting right away
     }
 }
 
@@ -290,8 +223,8 @@ void ClickOverlay::onReset() {
     m_needResync = true;
     m_held[0] = m_held[1] = false;
     m_lastLevelTime = -1.0;
-    m_assist[0] = AssistState{};
-    m_assist[1] = AssistState{};
+    m_assist[0].reset();
+    m_assist[1].reset();
 }
 
 void ClickOverlay::resync() {

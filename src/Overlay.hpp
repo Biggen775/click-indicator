@@ -2,6 +2,7 @@
 
 #include <Geode/Geode.hpp>
 #include "Macro.hpp"
+#include "Assist.hpp"
 
 #include <functional>
 #include <optional>
@@ -69,13 +70,7 @@ private:
     bool m_onlyPractice = false;
     bool m_enabled = true;
 
-    struct AssistState {
-        std::optional<double> pressAt;   // held-back press, fires at this macro time
-        std::optional<double> releaseAt; // held-back release
-        int active = -1;                 // macro press this click was matched to
-        int lastUsed = -1;               // so one macro click isn't matched twice
-    };
-    AssistState m_assist[2];
+    AssistEngine m_assist[2];
     bool m_assistOn = false;
     double m_assistWindow = 0.02;
     bool m_held[2] = {false, false};
