@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.1.0",
+	"version": "v2.1.1",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -482,6 +482,24 @@
 			"control": {
 				"slider": true,
 				"slider-step": 0.05
+			}
+		},
+		"cue-sound": {
+			"type": "bool",
+			"name": "Pre-Click Cue",
+			"description": "Plays a heads-up sound a little <cy>before</c> each macro click.",
+			"default": false
+		},
+		"cue-lead-ms": {
+			"type": "int",
+			"name": "Cue Lead (ms)",
+			"description": "How long before the click the cue plays.",
+			"default": 150,
+			"min": 30,
+			"max": 600,
+			"control": {
+				"slider": true,
+				"slider-step": 10
 			}
 		},
 		"stats-title": {

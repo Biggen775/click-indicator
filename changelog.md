@@ -1,3 +1,7 @@
+# v2.1.1
+
+- Pre-Click Cue: a heads-up sound a set number of ms before each click (Practice page, lead time in Settings).
+
 # v2.1.0
 
 - Auto-Play (bot mode) with a speed slider for slow-motion study.
