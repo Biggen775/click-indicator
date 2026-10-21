@@ -77,8 +77,18 @@ bool ClickOverlay::init(Macro macro, int levelID) {
     m_assistLabel->setOpacity(0);
     this->addChild(m_assistLabel, 2);
 
+    m_countdownLabel = CCLabelBMFont::create("", "bigFont.fnt");
+    m_countdownLabel->setScale(0.3f);
+    m_countdownLabel->setOpacity(0);
+    this->addChild(m_countdownLabel, 2);
+
+    m_timelineDraw = CCDrawNode::create();
+    m_timelineDraw->setBlendFunc({GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA});
+    this->addChild(m_timelineDraw, 1);
+
     this->loadSettings();
     this->loadTrouble();
+    this->loadHistory();
 
     // Apply the timing offset once
     double offset = m_set.offset / 1000.0;
@@ -116,6 +126,18 @@ void ClickOverlay::loadSettings() {
     m_set.tickRelease = mod->getSettingValue<bool>("tick-release");
     m_set.tickVolume = static_cast<float>(mod->getSettingValue<double>("tick-volume"));
     m_set.assistFlash = mod->getSettingValue<bool>("assist-flash");
+    m_set.offsetTrail = mod->getSettingValue<bool>("offset-trail");
+    m_set.countdown = mod->getSettingValue<bool>("countdown");
+    m_set.timeline = mod->getSettingValue<bool>("timeline");
+    m_set.countIn = mod->getSettingValue<bool>("count-in");
+    m_set.autoplay = mod->getSettingValue<bool>("autoplay");
+    m_set.autoplaySpeed = static_cast<float>(mod->getSettingValue<double>("autoplay-speed"));
+    m_set.sectionStart = static_cast<float>(mod->getSettingValue<int64_t>("section-start"));
+    m_set.sectionEnd = static_cast<float>(mod->getSettingValue<int64_t>("section-end"));
+    m_set.perfectMs = mod->getSettingValue<double>("judge-perfect-ms");
+    m_set.greatMs = std::max(m_set.perfectMs, mod->getSettingValue<double>("judge-great-ms"));
+    m_set.goodMs = std::max(m_set.greatMs, mod->getSettingValue<double>("judge-good-ms"));
+    this->applyTheme(mod->getSettingValue<std::string>("theme"));
     m_onlyPractice = mod->getSettingValue<bool>("only-practice");
     m_enabled = mod->getSettingValue<bool>("enabled");
     m_assistOn = mod->getSettingValue<bool>("assist-enabled");
@@ -167,6 +189,174 @@ void ClickOverlay::noteResult(int pressIndex, bool bad) {
 bool ClickOverlay::isTrouble(int pressIndex) const {
     return m_set.troubleSpots && pressIndex >= 0 && pressIndex < static_cast<int>(m_trouble.size()) &&
         m_trouble[pressIndex] >= m_set.troubleThreshold;
+}
+
+void ClickOverlay::applyTheme(std::string const& theme) {
+    auto set = [&](ccColor4F bar, ccColor4F p2, ccColor4F line, ccColor4F lane, ccColor4F p2lane, ccColor4F trouble) {
+        m_set.barColor = bar; m_set.p2Color = p2; m_set.lineColor = line;
+        m_set.laneColor = lane; m_set.p2LaneColor = p2lane; m_set.troubleColor = trouble;
+    };
+    if (theme == "osu! Pink") {
+        set(ccc4f(1.f, 0.4f, 0.75f, 0.32f), ccc4f(0.4f, 0.8f, 1.f, 0.32f), ccc4f(1.f, 1.f, 1.f, 0.7f),
+            ccc4f(1.f, 0.45f, 0.8f, 1.f), ccc4f(0.4f, 0.8f, 1.f, 1.f), ccc4f(1.f, 0.9f, 0.2f, 1.f));
+    }
+    else if (theme == "High Contrast") {
+        set(ccc4f(1.f, 1.f, 0.f, 0.5f), ccc4f(0.f, 1.f, 1.f, 0.5f), ccc4f(1.f, 1.f, 1.f, 1.f),
+            ccc4f(1.f, 1.f, 0.f, 1.f), ccc4f(0.f, 1.f, 1.f, 1.f), ccc4f(1.f, 0.f, 0.f, 1.f));
+    }
+    else if (theme == "Ice") {
+        set(ccc4f(0.45f, 0.85f, 1.f, 0.32f), ccc4f(0.8f, 0.6f, 1.f, 0.32f), ccc4f(1.f, 1.f, 1.f, 0.7f),
+            ccc4f(0.5f, 0.9f, 1.f, 1.f), ccc4f(0.8f, 0.6f, 1.f, 1.f), ccc4f(1.f, 0.35f, 0.35f, 1.f));
+    }
+    // "Classic" and "Custom" keep the colors from the settings
+}
+
+// ---------------------------------------------------------------------------
+// Attempt history
+// ---------------------------------------------------------------------------
+
+void ClickOverlay::loadHistory() {
+    m_history.clear();
+    auto saved = Mod::get()->getSavedValue<matjson::Value>(fmt::format("history/{}", m_levelID), matjson::Value::array());
+    if (!saved.isArray()) return;
+    for (auto const& v : saved) m_history.push_back(v.asDouble().unwrapOr(0.0));
+}
+
+void ClickOverlay::saveHistory() {
+    auto arr = matjson::Value::array();
+    size_t from = m_history.size() > 30 ? m_history.size() - 30 : 0;
+    for (size_t i = from; i < m_history.size(); i++) arr.push(matjson::Value(m_history[i]));
+    Mod::get()->setSavedValue(fmt::format("history/{}", m_levelID), arr);
+}
+
+void ClickOverlay::finishAttempt(bool completed) {
+    if (m_stats.total() == 0) return;
+    m_history.push_back(m_stats.accuracy());
+    if (m_history.size() > 30) m_history.erase(m_history.begin());
+    this->saveHistory();
+
+    // progressive assist: a clean run drops the strength by one
+    auto mod = Mod::get();
+    if (mod->getSettingValue<bool>("progressive-assist") && m_assistOn && m_stats.miss == 0 &&
+        m_stats.accuracy() >= static_cast<double>(mod->getSettingValue<int64_t>("progressive-target"))) {
+        int64_t st = mod->getSettingValue<int64_t>("assist-strength");
+        if (st > 1) {
+            mod->setSettingValue<int64_t>("assist-strength", st - 1);
+            Notification::create(fmt::format("Clean run! Assist strength is now {}", st - 1), NotificationIcon::Success)->show();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Count-in, autoplay, section practice, editing
+// ---------------------------------------------------------------------------
+
+void ClickOverlay::setupCountIn() {
+    m_countIn.clear();
+    m_countInCursor = 0;
+    if (!m_set.countIn) return;
+    auto it = std::lower_bound(m_macro.presses.begin(), m_macro.presses.end(), m_now, [](Press const& p, double t) {
+        return p.start < t;
+    });
+    if (it == m_macro.presses.end()) return;
+    double first = it->start;
+    if (first - m_now < 1.2) return; // too close for a count-in
+    for (int i = 3; i >= 1; i--) m_countIn.push_back(first - 0.5 * i);
+}
+
+bool ClickOverlay::autoplayActive(PlayLayer* pl) const {
+    return m_set.autoplay && m_enabled && !pl->m_isPlatformer && !m_macro.presses.empty();
+}
+
+void ClickOverlay::autoplayTick(PlayLayer* pl, std::function<void(bool, bool)> const& fire) {
+    bool active = this->autoplayActive(pl);
+    if (!active) {
+        for (int p = 0; p < 2; p++) {
+            if (m_autoHeld[p]) { m_autoHeld[p] = false; fire(false, p == 1); }
+        }
+        m_autoResync = true;
+        return;
+    }
+    double now = this->currentTime(pl) + 0.5 / m_macro.framerate;
+    auto& presses = m_macro.presses;
+
+    if (m_autoResync) {
+        m_autoResync = false;
+        m_autoCursor = 0;
+        while (m_autoCursor < presses.size() && presses[m_autoCursor].start <= now) m_autoCursor++;
+        // inside a hold right now? press it
+        for (size_t i = m_autoCursor; i-- > 0;) {
+            if (presses[i].start > now - 5.0) {
+                int p = presses[i].p2 ? 1 : 0;
+                if (presses[i].end > now && !m_autoHeld[p]) { m_autoHeld[p] = true; fire(true, presses[i].p2); }
+            }
+            else break;
+        }
+    }
+
+    // releases that are due
+    for (size_t i = m_autoCursor; i-- > 0;) {
+        if (presses[i].start < now - 5.0) break;
+        int p = presses[i].p2 ? 1 : 0;
+        if (m_autoHeld[p] && presses[i].end <= now && presses[i].end > now - 0.2) {
+            // only release if no later press for this player is already holding
+            m_autoHeld[p] = false;
+            fire(false, presses[i].p2);
+        }
+    }
+    // presses that are due
+    while (m_autoCursor < presses.size() && presses[m_autoCursor].start <= now) {
+        auto const& pr = presses[m_autoCursor];
+        int p = pr.p2 ? 1 : 0;
+        if (pr.end > now) {
+            if (!m_autoHeld[p]) { m_autoHeld[p] = true; fire(true, pr.p2); }
+        }
+        else if (pr.start > now - 0.2) {
+            // a whole tap inside one tick: press now, release next tick
+            if (!m_autoHeld[p]) { m_autoHeld[p] = true; fire(true, pr.p2); }
+        }
+        m_autoCursor++;
+    }
+}
+
+bool ClickOverlay::sectionEndReached(PlayLayer* pl) {
+    if (m_set.sectionEnd <= 0.f || m_set.sectionEnd >= 100.f) return false;
+    float pct = pl->getCurrentPercent();
+    if (pct < m_set.sectionEnd - 2.f) m_sectionArmedEnd = true;
+    if (m_sectionArmedEnd && pct >= m_set.sectionEnd) {
+        m_sectionArmedEnd = false;
+        return true;
+    }
+    return false;
+}
+
+bool ClickOverlay::sectionWantsCheckpoint(PlayLayer* pl) {
+    if (m_set.sectionStart <= 0.f || !pl->m_isPracticeMode) return false;
+    float pct = pl->getCurrentPercent();
+    if (pct < m_set.sectionStart - 2.f) m_sectionArmedStart = true;
+    if (m_sectionArmedStart && pct >= m_set.sectionStart) {
+        m_sectionArmedStart = false;
+        return true;
+    }
+    return false;
+}
+
+void ClickOverlay::shiftMacro(double seconds) {
+    for (auto& p : m_macro.presses) { p.start += seconds; p.end += seconds; }
+    m_prepared = false;
+    m_needResync = true;
+    m_autoResync = true;
+}
+
+void ClickOverlay::trimMacroBefore(double seconds) {
+    auto& v = m_macro.presses;
+    v.erase(std::remove_if(v.begin(), v.end(), [&](Press const& p) { return p.end < seconds; }), v.end());
+    m_trouble.assign(v.size(), 0);
+    m_troubleDirty = true;
+    m_lastOffsets.clear();
+    m_prepared = false;
+    m_needResync = true;
+    m_autoResync = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +516,12 @@ void ClickOverlay::onReset() {
     m_assist[0].reset();
     m_assist[1].reset();
     m_stats.reset();
+    m_autoResync = true;
+    // keep last attempt's offsets for the trail, start a fresh set
+    if (!m_curOffsets.empty()) m_lastOffsets = m_curOffsets;
+    m_curOffsets.assign(m_macro.presses.size(), 9999.f);
+    m_sectionArmedEnd = false;
+    m_sectionArmedStart = false;
 }
 
 void ClickOverlay::resync() {
@@ -339,6 +535,8 @@ void ClickOverlay::resync() {
     // ticks: start from the first press that is still ahead
     m_tickCursor = 0;
     while (m_tickCursor < m_macro.presses.size() && m_macro.presses[m_tickCursor].start <= m_now) m_tickCursor++;
+    if (m_curOffsets.size() != m_macro.presses.size()) m_curOffsets.assign(m_macro.presses.size(), 9999.f);
+    this->setupCountIn();
 }
 
 void ClickOverlay::updateMisses() {
@@ -357,14 +555,21 @@ void ClickOverlay::updateMisses() {
 }
 
 void ClickOverlay::playTicks() {
-    if (!m_set.tickPress) return;
-    auto& presses = m_macro.presses;
     static std::string s_tickPath;
     static std::string s_tickUpPath;
     if (s_tickPath.empty()) {
         s_tickPath = utils::string::pathToString(Mod::get()->getResourcesDir() / "tick.ogg");
         s_tickUpPath = utils::string::pathToString(Mod::get()->getResourcesDir() / "tick-up.ogg");
     }
+    // count-in beats before the first click
+    while (m_countInCursor < m_countIn.size() && m_countIn[m_countInCursor] <= m_now) {
+        if (m_countIn[m_countInCursor] > m_now - 0.25) {
+            FMODAudioEngine::sharedEngine()->playEffect(s_tickUpPath, 1.f, 0.f, m_set.tickVolume);
+        }
+        m_countInCursor++;
+    }
+    if (!m_set.tickPress) return;
+    auto& presses = m_macro.presses;
     // presses whose start we just crossed
     int played = 0;
     while (m_tickCursor < presses.size() && presses[m_tickCursor].start <= m_now) {
@@ -408,7 +613,7 @@ void ClickOverlay::recordJudgment(char const* text, int pressIndex, std::optiona
         m_stats.sumMs += *ms;
     }
 
-    bool bad = t == "MISS" || (ms && std::abs(*ms) > kBadMs);
+    bool bad = t == "MISS" || (ms && std::abs(*ms) > m_set.greatMs);
     if (pressIndex >= 0) {
         this->noteResult(pressIndex, bad);
         if (bad) {
@@ -473,10 +678,11 @@ void ClickOverlay::onPlayerInput(PlayLayer* pl, bool down, bool p2) {
     double a = std::abs(ms);
     char const* text;
     ccColor3B color;
-    if (a <= 20.0) { text = "PERFECT"; color = {90, 240, 255}; }
-    else if (a <= 45.0) { text = "GREAT"; color = {60, 255, 120}; }
-    else if (a <= 90.0) { text = "GOOD"; color = {255, 230, 80}; }
+    if (a <= m_set.perfectMs) { text = "PERFECT"; color = {90, 240, 255}; }
+    else if (a <= m_set.greatMs) { text = "GREAT"; color = {60, 255, 120}; }
+    else if (a <= m_set.goodMs) { text = "GOOD"; color = {255, 230, 80}; }
     else { text = "BAD"; color = {255, 140, 60}; }
+    if (idx >= 0 && idx < static_cast<int>(m_curOffsets.size())) m_curOffsets[idx] = static_cast<float>(ms);
     this->recordJudgment(text, idx, ms);
     if (m_set.showJudgments) this->showJudgment(text, color, ms, p2);
 }
@@ -520,8 +726,28 @@ void ClickOverlay::refresh(PlayLayer* pl, float dt) {
 
     m_barDraw->clear();
     m_laneDraw->clear();
+    m_timelineDraw->clear();
 
     if (m_set.showBars || m_set.showHitLine) this->drawBars(pl);
+    if (m_set.timeline) this->drawTimeline(pl);
+
+    // countdown to the next click
+    if (m_set.countdown) {
+        auto it = std::lower_bound(m_macro.presses.begin(), m_macro.presses.end(), m_now, [](Press const& p, double t) {
+            return p.start < t;
+        });
+        double gap = it != m_macro.presses.end() ? it->start - m_now : -1.0;
+        if (gap >= 1.0) {
+            m_countdownLabel->setString(fmt::format("{:.1f}", gap).c_str());
+            m_countdownLabel->setOpacity(200);
+        }
+        else {
+            m_countdownLabel->setOpacity(0);
+        }
+    }
+    else {
+        m_countdownLabel->setOpacity(0);
+    }
 
     auto win = CCDirector::get()->getWinSize();
     float s = m_set.laneScale;
@@ -753,6 +979,8 @@ void ClickOverlay::drawLane(int lane, float cx) {
     m_laneDraw->drawSegment(ccp(rx + cw, cy + ch), ccp(rx, cy), lw, receptor);
     m_laneDraw->drawSegment(ccp(rx, cy), ccp(rx + cw, cy - ch), lw, receptor);
 
+    if (m_set.offsetTrail) this->drawTrailVertical(lane, cx, bottomY, topY, speed);
+
     if (lane == 0) {
         m_judgeLabel->setPosition({cx, bottomY - 11.f * s});
         m_judgeLabel->setScale(0.28f * s);
@@ -760,6 +988,91 @@ void ClickOverlay::drawLane(int lane, float cx) {
         m_offsetLabel->setScale(0.45f * s);
         m_assistLabel->setPosition({cx, topY + 8.f * s});
         m_assistLabel->setScale(0.22f * s);
+        m_countdownLabel->setPosition({cx, topY + 18.f * s});
+        m_countdownLabel->setScale(0.3f * s);
+    }
+}
+
+// Dots showing how early/late you were on each note last attempt (and this one)
+void ClickOverlay::drawTrailVertical(int lane, float cx, float bottomY, float topY, float speed) {
+    float s = m_set.laneScale;
+    bool p2 = lane == 1;
+    auto& presses = m_macro.presses;
+    auto it = std::lower_bound(presses.begin(), presses.end(), m_now - 1.0, [](Press const& p, double t) {
+        return p.start < t;
+    });
+    for (; it != presses.end() && it->start <= m_now + m_set.laneLookahead; ++it) {
+        if (it->p2 != p2) continue;
+        int idx = static_cast<int>(it - presses.begin());
+        float y = bottomY + static_cast<float>(it->start - m_now) * speed;
+        if (y < bottomY - 4.f || y > topY) continue;
+        auto draw = [&](std::vector<float> const& offs, ccColor4F col) {
+            if (idx >= static_cast<int>(offs.size()) || offs[idx] > 5000.f) return;
+            float ms = offs[idx];
+            float dy = std::clamp(ms / 1000.f * speed, -14.f * s, 14.f * s); // late = above the note
+            float dx = std::clamp(ms / 8.f, -12.f, 12.f) * s;                   // and shifted sideways so it's readable
+            m_laneDraw->drawDot(ccp(cx + dx, y + dy), 1.8f * s, col);
+        };
+        draw(m_lastOffsets, ccc4f(1.f, 1.f, 1.f, 0.45f));
+        draw(m_curOffsets, ccc4f(1.f, 0.9f, 0.3f, 0.95f));
+    }
+    // center guide
+    m_laneDraw->drawSegment(ccp(cx, bottomY), ccp(cx, topY), 0.3f, ccc4f(1.f, 1.f, 1.f, 0.12f));
+}
+
+void ClickOverlay::drawTrailHorizontal(int lane, float cy, float leftX, float rightX, float speed) {
+    float s = m_set.laneScale;
+    bool p2 = lane == 1;
+    auto& presses = m_macro.presses;
+    auto it = std::lower_bound(presses.begin(), presses.end(), m_now - 1.0, [](Press const& p, double t) {
+        return p.start < t;
+    });
+    for (; it != presses.end() && it->start <= m_now + m_set.laneLookahead; ++it) {
+        if (it->p2 != p2) continue;
+        int idx = static_cast<int>(it - presses.begin());
+        float x = leftX + static_cast<float>(it->start - m_now) * speed;
+        if (x < leftX - 4.f || x > rightX) continue;
+        auto draw = [&](std::vector<float> const& offs, ccColor4F col) {
+            if (idx >= static_cast<int>(offs.size()) || offs[idx] > 5000.f) return;
+            float ms = offs[idx];
+            float dx = std::clamp(ms / 1000.f * speed, -14.f * s, 14.f * s);
+            float dy = std::clamp(ms / 8.f, -8.f, 8.f) * s;
+            m_laneDraw->drawDot(ccp(x + dx, cy + dy), 1.8f * s, col);
+        };
+        draw(m_lastOffsets, ccc4f(1.f, 1.f, 1.f, 0.45f));
+        draw(m_curOffsets, ccc4f(1.f, 0.9f, 0.3f, 0.95f));
+    }
+}
+
+// Thin bar across the top: every click as a tick, trouble spots red, and where you are
+void ClickOverlay::drawTimeline(PlayLayer* pl) {
+    auto win = CCDirector::get()->getWinSize();
+    float y = win.height - 22.f;
+    float x0 = 60.f, x1 = win.width - 60.f;
+    double total = 0.0;
+    for (auto const& p : m_macro.presses) total = std::max(total, p.end);
+    if (total <= 0.0) return;
+
+    m_timelineDraw->drawRect(ccp(x0, y - 3.f), ccp(x1, y + 3.f), ccc4f(0.f, 0.f, 0.f, 0.5f), 0.f, ccc4f(0, 0, 0, 0));
+    for (size_t i = 0; i < m_macro.presses.size(); i++) {
+        auto const& p = m_macro.presses[i];
+        float xs = x0 + static_cast<float>(p.start / total) * (x1 - x0);
+        float xe = x0 + static_cast<float>(p.end / total) * (x1 - x0);
+        auto c = this->isTrouble(static_cast<int>(i)) ? m_set.troubleColor : (p.p2 ? m_set.p2LaneColor : m_set.laneColor);
+        c = withAlpha(c, p.start < m_now ? 0.35f : 0.9f);
+        m_timelineDraw->drawRect(ccp(xs, y - 2.5f), ccp(std::max(xe, xs + 0.8f), y + 2.5f), c, 0.f, ccc4f(0, 0, 0, 0));
+    }
+    float px = x0 + static_cast<float>(std::clamp(m_now / total, 0.0, 1.0)) * (x1 - x0);
+    m_timelineDraw->drawSegment(ccp(px, y - 5.f), ccp(px, y + 5.f), 0.8f, m_set.lineColor);
+
+    // section markers
+    if (m_set.sectionStart > 0.f) {
+        float sx = x0 + m_set.sectionStart / 100.f * (x1 - x0);
+        m_timelineDraw->drawSegment(ccp(sx, y - 5.f), ccp(sx, y + 5.f), 0.6f, ccc4f(1.f, 0.9f, 0.2f, 0.9f));
+    }
+    if (m_set.sectionEnd > 0.f && m_set.sectionEnd < 100.f) {
+        float sx = x0 + m_set.sectionEnd / 100.f * (x1 - x0);
+        m_timelineDraw->drawSegment(ccp(sx, y - 5.f), ccp(sx, y + 5.f), 0.6f, ccc4f(1.f, 0.9f, 0.2f, 0.9f));
     }
 }
 
@@ -825,6 +1138,8 @@ void ClickOverlay::drawLaneHorizontal(int lane, float cy) {
     m_laneDraw->drawSegment(ccp(leftX - cw, by - cw), ccp(leftX, by), lw, receptor);
     m_laneDraw->drawSegment(ccp(leftX, by), ccp(leftX + cw, by - cw), lw, receptor);
 
+    if (m_set.offsetTrail) this->drawTrailHorizontal(lane, cy, leftX, rightX, speed);
+
     if (lane == 0) {
         m_judgeLabel->setPosition({leftX - 30.f * s, cy + 4.f * s});
         m_judgeLabel->setScale(0.28f * s);
@@ -832,5 +1147,7 @@ void ClickOverlay::drawLaneHorizontal(int lane, float cy) {
         m_offsetLabel->setScale(0.45f * s);
         m_assistLabel->setPosition({leftX - 30.f * s, cy + hh + 14.f * s});
         m_assistLabel->setScale(0.22f * s);
+        m_countdownLabel->setPosition({rightX + 14.f * s, cy});
+        m_countdownLabel->setScale(0.3f * s);
     }
 }

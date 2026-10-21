@@ -32,6 +32,12 @@ public:
         for (auto const& in : m_inputs) m_held[in.p2 ? 1 : 0] = in.down;
     }
 
+    std::vector<Input> const& inputs() const { return m_inputs; }
+    std::pair<double, double> timeRange() const {
+        if (m_inputs.empty()) return {0.0, 0.0};
+        return {m_inputs.front().t, m_inputs.back().t};
+    }
+
     geode::Result<> save(std::filesystem::path const& path, std::string const& levelName, int levelID, double framerate) const;
 
 private:

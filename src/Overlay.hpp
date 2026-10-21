@@ -54,6 +54,25 @@ public:
 
     double currentTime(PlayLayer* pl);
 
+    // ---- Auto-play (bot) ----
+    bool autoplayActive(PlayLayer* pl) const;
+    // Called every tick: fires the macro's own presses/releases. fire(down, p2)
+    void autoplayTick(PlayLayer* pl, std::function<void(bool down, bool p2)> const& fire);
+
+    // ---- Section practice ----
+    // true when the player just crossed the section end (caller restarts the level)
+    bool sectionEndReached(PlayLayer* pl);
+    bool sectionWantsCheckpoint(PlayLayer* pl); // crossed the section start in practice mode
+
+    // Attempt finished (death / complete / section loop): store history, return accuracy
+    void finishAttempt(bool completed);
+    std::vector<double> const& history() const { return m_history; }
+
+    // Macro editing helpers
+    void shiftMacro(double seconds);
+    void trimMacroBefore(double seconds);
+    double nowTime() const { return m_now; }
+
 protected:
     bool init(Macro macro, int levelID);
 
@@ -62,8 +81,11 @@ private:
         bool showBars, showHitLine, showMarkers, hidePassed;
         bool showLane, laneRight, laneHorizontal, showJudgments;
         bool assistFlash, troubleSpots, tickPress, tickRelease;
+        bool offsetTrail, countdown, timeline, countIn, autoplay;
         float laneLookahead, laneScale, offset, hideAfterPercent, laneGap;
-        float tickVolume;
+        float tickVolume, autoplaySpeed;
+        float sectionStart, sectionEnd;
+        double perfectMs, greatMs, goodMs;
         int troubleThreshold;
         cocos2d::ccColor4F barColor, p2Color, lineColor, laneColor, p2LaneColor, troubleColor;
     };
@@ -102,6 +124,24 @@ private:
     float m_assistOffPercent = 0.f;
     float m_assistFlashTimer = 0.f;
 
+    // autoplay
+    size_t m_autoCursor = 0;
+    bool m_autoHeld[2] = {false, false};
+    bool m_autoResync = true;
+    // offset trail: offsets from the previous attempt, by press index
+    std::vector<float> m_lastOffsets;
+    std::vector<float> m_curOffsets;
+    // attempt history (accuracy per attempt) for this level
+    std::vector<double> m_history;
+    // count-in
+    std::vector<double> m_countIn;
+    size_t m_countInCursor = 0;
+    // section practice
+    bool m_sectionArmedEnd = false;
+    bool m_sectionArmedStart = false;
+    cocos2d::CCLabelBMFont* m_countdownLabel = nullptr;
+    cocos2d::CCDrawNode* m_timelineDraw = nullptr;
+
     // trouble spots: bad attempts per macro press
     std::vector<int> m_trouble;
     bool m_troubleDirty = false;
@@ -129,4 +169,11 @@ private:
     void drawBars(PlayLayer* pl);
     void drawLane(int lane, float centerX);
     void drawLaneHorizontal(int lane, float centerY);
+    void drawTimeline(PlayLayer* pl);
+    void drawTrailVertical(int lane, float cx, float bottomY, float topY, float speed);
+    void drawTrailHorizontal(int lane, float cy, float leftX, float rightX, float speed);
+    void loadHistory();
+    void saveHistory();
+    void setupCountIn();
+    void applyTheme(std::string const& theme);
 };

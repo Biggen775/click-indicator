@@ -12,14 +12,73 @@ namespace {
     ClickMenu* s_openMenu = nullptr;
 
     constexpr float kWidth = 420.f;
-    constexpr float kHeight = 300.f;
-    constexpr int kPages = 3;
-    constexpr char const* kPageNames[kPages] = {"Display", "Aim Assist", "Tools"};
+    constexpr float kHeight = 318.f;
+    constexpr int kPages = 4;
+    constexpr char const* kPageNames[kPages] = {"Display", "Aim Assist", "Practice", "Tools"};
 
     void settingChanged() {
         refreshOverlaySettings();
         savePerLevelSettings();
     }
+
+    // Stats popup: text + a bar chart of accuracy per attempt
+    class StatsPopup : public Popup {
+    public:
+        static StatsPopup* create() {
+            auto ret = new StatsPopup();
+            if (ret->init(360.f, 270.f, "GJ_square01.png")) {
+                ret->autorelease();
+                return ret;
+            }
+            delete ret;
+            return nullptr;
+        }
+
+    private:
+        bool init(float w, float h, char const* bg) {
+            if (!Popup::init(w, h, bg)) return false;
+            this->setTitle("Attempt Stats", "goldFont.fnt", 0.8f, 18.f);
+
+            auto text = CCLabelBMFont::create(currentStatsText().c_str(), "chatFont.fnt");
+            text->setAlignment(kCCTextAlignmentLeft);
+            text->setAnchorPoint({0.f, 1.f});
+            text->setPosition({18.f, h - 40.f});
+            text->setScale(0.55f);
+            text->limitLabelWidth(w - 36.f, 0.55f, 0.3f);
+            m_mainLayer->addChild(text, 10);
+
+            auto hist = attemptHistory();
+            auto label = CCLabelBMFont::create(fmt::format("Accuracy over the last {} attempts", hist.size()).c_str(), "bigFont.fnt");
+            label->setScale(0.32f);
+            label->setPosition({w / 2.f, 96.f});
+            m_mainLayer->addChild(label, 10);
+
+            auto draw = CCDrawNode::create();
+            m_mainLayer->addChild(draw, 10);
+            float x0 = 30.f, x1 = w - 30.f, y0 = 22.f, y1 = 84.f;
+            draw->drawRect(ccp(x0, y0), ccp(x1, y1), ccc4f(0.f, 0.f, 0.f, 0.35f), 0.f, ccc4f(0, 0, 0, 0));
+            for (int pct : {50, 100}) {
+                float y = y0 + (y1 - y0) * pct / 100.f;
+                draw->drawSegment(ccp(x0, y), ccp(x1, y), 0.4f, ccc4f(1.f, 1.f, 1.f, 0.15f));
+            }
+            if (!hist.empty()) {
+                float bw = (x1 - x0) / static_cast<float>(hist.size());
+                for (size_t i = 0; i < hist.size(); i++) {
+                    float v = static_cast<float>(std::clamp(hist[i], 0.0, 100.0)) / 100.f;
+                    float bx = x0 + bw * i + 1.f;
+                    auto c = v >= 0.9f ? ccc4f(0.35f, 1.f, 0.5f, 0.9f) : v >= 0.7f ? ccc4f(1.f, 0.9f, 0.3f, 0.9f) : ccc4f(1.f, 0.4f, 0.4f, 0.9f);
+                    draw->drawRect(ccp(bx, y0), ccp(bx + std::max(bw - 2.f, 1.f), y0 + (y1 - y0) * v), c, 0.f, ccc4f(0, 0, 0, 0));
+                }
+            }
+            else {
+                auto none = CCLabelBMFont::create("no finished attempts yet", "chatFont.fnt");
+                none->setScale(0.5f);
+                none->setPosition({w / 2.f, (y0 + y1) / 2.f});
+                m_mainLayer->addChild(none, 11);
+            }
+            return true;
+        }
+    };
 
     // Small popup listing the macro files in the folder
     class MacroPicker : public Popup {
@@ -248,6 +307,19 @@ void ClickMenu::buildPage() {
         resetBtn->setPosition({leftX + 60.f, top - step * 4.4f});
         menu->addChild(resetBtn);
     }
+    else if (m_page == 2) {
+        this->addToggle(m_pageNode, menu, "Auto-Play", "autoplay", {leftX, top}, "The mod plays the macro for you so you can watch the clicks and the lane in sync. Your own clicks are ignored while it's on. Progress is never saved in auto-play.");
+        this->addNumberRow(m_pageNode, menu, "Auto-Play Speed %", "autoplay-speed-pct", 25, 100, 5, {leftX + 70.f, top - step * 1.5f}, nullptr, "%");
+        this->addToggle(m_pageNode, menu, "Count-In Beats", "count-in", {leftX, top - step * 3}, "Three soft ticks half a second apart before the first click after a restart or checkpoint.");
+        this->addToggle(m_pageNode, menu, "Progressive Assist", "progressive-assist", {leftX, top - step * 4}, "Every time you finish a run or section with no misses and at least the target accuracy, the assist strength drops by one.");
+        this->addNumberRow(m_pageNode, menu, "Clean Run Target %", "progressive-target", 50, 100, 5, {leftX + 70.f, top - step * 5.5f}, nullptr, "%");
+
+        this->addToggle(m_pageNode, menu, "Section Practice", "section-practice", {rightX, top}, "Drill one part of the level. In practice mode a checkpoint is placed when you reach the start percent, and the level restarts when you reach the end percent. Stats count the section.");
+        this->addNumberRow(m_pageNode, menu, "Section Start %", "section-start", 0, 99, 1, {rightX + 60.f, top - step * 1.5f}, nullptr, "%");
+        this->addNumberRow(m_pageNode, menu, "Section End %", "section-end", 0, 100, 1, {rightX + 60.f, top - step * 3.f}, nullptr, "%");
+        this->addLabel(m_pageNode, "End 0 or 100 = play to the end", {rightX + 60.f, top - step * 4.1f}, 0.4f);
+        this->addToggle(m_pageNode, menu, "Timeline", "timeline", {rightX, top - step * 5.f}, "A thin bar across the top with every click as a tick mark (red = trouble spot), your position, and the section markers.");
+    }
     else {
         // Tools: recording + stats
         this->addLabel(m_pageNode, "Record Your Own Macro", {kWidth / 2.f, top + 4.f}, 0.5f);
@@ -285,7 +357,7 @@ void ClickMenu::buildPage() {
         this->addLabel(m_pageNode, "Attempt Stats", {kWidth / 2.f, top - step * 3.2f}, 0.5f);
         auto statsSpr = ButtonSprite::create("Show Stats", "goldFont.fnt", "GJ_button_01.png", 0.6f);
         auto statsBtn = CCMenuItemExt::createSpriteExtra(statsSpr, [](auto) {
-            FLAlertLayer::create("Click Indicator Stats", currentStatsText(), "OK")->show();
+            if (auto p = StatsPopup::create()) p->show();
         });
         statsBtn->setPosition({kWidth / 2.f - 70.f, top - step * 4.2f});
         menu->addChild(statsBtn);
@@ -299,6 +371,30 @@ void ClickMenu::buildPage() {
         menu->addChild(clearBtn);
         this->addToggle(m_pageNode, menu, "Stats On Death", "stats-on-death", {leftX, top - step * 5.3f}, "Shows a short accuracy summary every time you die.");
         this->addToggle(m_pageNode, menu, "Stats On Finish", "stats-on-complete", {rightX, top - step * 5.3f}, "Shows the full stats popup when you complete the level.");
+        this->addToggle(m_pageNode, menu, "Merge Recordings", "record-merge", {rightX, top - step * 1.9f + 14.f}, "When a recording is saved over an existing macro with the same name, only the part you recorded is replaced. Record your best sections one at a time.");
+
+        // macro editing row
+        this->addLabel(m_pageNode, "Edit Macro", {kWidth / 2.f, top - step * 6.4f + 2.f}, 0.5f);
+        auto mkBtn = [&](char const* text, float x, auto cb) {
+            auto spr = ButtonSprite::create(text, "goldFont.fnt", "GJ_button_04.png", 0.5f);
+            auto btn = CCMenuItemExt::createSpriteExtra(spr, cb);
+            btn->setPosition({x, top - step * 7.3f});
+            menu->addChild(btn);
+        };
+        mkBtn("-5ms", kWidth / 2.f - 150.f, [this](auto) { if (shiftCurrentMacro(-5)) this->updateStatus(); else Notification::create("Open a level with a macro first", NotificationIcon::Info)->show(); });
+        mkBtn("+5ms", kWidth / 2.f - 90.f, [this](auto) { if (shiftCurrentMacro(5)) this->updateStatus(); else Notification::create("Open a level with a macro first", NotificationIcon::Info)->show(); });
+        mkBtn("Trim Before Here", kWidth / 2.f - 5.f, [this](auto) {
+            if (trimCurrentMacroHere()) { Notification::create("Removed clicks before this point", NotificationIcon::Info)->show(); this->updateStatus(); }
+            else Notification::create("Open a level with a macro first", NotificationIcon::Info)->show();
+        });
+        mkBtn("Save Edited", kWidth / 2.f + 85.f, [](auto) {
+            auto f = saveEditedMacro();
+            if (!f.empty()) Notification::create("Saved " + f, NotificationIcon::Success)->show();
+        });
+        mkBtn("Export .gdr2", kWidth / 2.f + 160.f, [](auto) {
+            auto f = exportCurrentMacroGdr2();
+            if (!f.empty()) Notification::create("Exported " + f, NotificationIcon::Success)->show();
+        });
     }
     this->updateNumberLabels();
 }
@@ -384,14 +480,24 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
     if (labelOut) *labelOut = value;
 
     std::string key = settingKey, suf = suffix;
-    auto refresh = [key, suf, value]() {
-        int64_t v = Mod::get()->getSettingValue<int64_t>(key);
+    bool speedPct = key == "autoplay-speed-pct";
+    auto getV = [key, speedPct]() -> int64_t {
+        if (speedPct) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>("autoplay-speed") * 100.0));
+        return Mod::get()->getSettingValue<int64_t>(key);
+    };
+    auto setV = [key, speedPct](int64_t v) {
+        if (speedPct) Mod::get()->setSettingValue<double>("autoplay-speed", v / 100.0);
+        else Mod::get()->setSettingValue<int64_t>(key, v);
+    };
+    auto refresh = [key, suf, value, getV]() {
+        int64_t v = getV();
         std::string s = fmt::format("{}{}", v, suf);
         if (key == "assist-strength" || (key == "assist-release-strength" && v > 0)) {
             s += fmt::format(" ({:.0f}ms)", ClickOverlay::assistWindowFor(static_cast<int>(v)) * 1000.0);
         }
         else if (key == "assist-release-strength") s = "same as press";
-        else if (v == 0) s = "never";
+        else if (v == 0 && key != "section-start" && key != "autoplay-speed-pct") s = "never";
+        else if (v == 0 && key == "section-start") s = "from start";
         value->setString(s.c_str());
         value->limitLabelWidth(90.f, 0.4f, 0.2f);
     };
@@ -400,11 +506,12 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
     auto makeArrow = [=](bool right) {
         auto spr = CCSprite::createWithSpriteFrameName("navArrowBtn_001.png");
         spr->setScale(0.4f);
+        (void)lo; (void)hi;
         if (!right) spr->setFlipX(true);
         auto btn = CCMenuItemExt::createSpriteExtra(spr, [=](auto) {
-            int64_t v = Mod::get()->getSettingValue<int64_t>(key) + (right ? step : -step);
+            int64_t v = getV() + (right ? step : -step);
             v = std::clamp<int64_t>(v, lo, hi);
-            Mod::get()->setSettingValue<int64_t>(key, v);
+            setV(v);
             settingChanged();
             refresh();
         });

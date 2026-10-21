@@ -11,8 +11,11 @@
 #include "Recorder.hpp"
 #include "Shared.hpp"
 
+#include <gdr/gdr.hpp>
+
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 
 using namespace geode::prelude;
 
@@ -141,14 +144,33 @@ class $modify(CIPlayLayer, PlayLayer) {
         bool forcedTestMode = false;
         bool savedTestMode = false;
         bool statsShown = false;
+        bool speedApplied = false;
+        bool tutorialShown = false;
     };
+
+    // Slow motion while auto-play is on
+    void updateSpeed() {
+        auto fields = m_fields.self();
+        auto mod = Mod::get();
+        bool want = fields->overlay && mod->getSettingValue<bool>("enabled") && mod->getSettingValue<bool>("autoplay");
+        float speed = static_cast<float>(mod->getSettingValue<double>("autoplay-speed"));
+        if (want && speed > 0.05f && speed < 0.999f) {
+            CCScheduler::get()->setTimeScale(speed);
+            fields->speedApplied = true;
+        }
+        else if (fields->speedApplied) {
+            CCScheduler::get()->setTimeScale(1.f);
+            fields->speedApplied = false;
+        }
+    }
 
     // Safe mode: while the aim assist is on, run the level like a start-pos test so no progress is saved
     void updateSafeMode() {
         auto fields = m_fields.self();
         auto mod = Mod::get();
         bool want = fields->overlay && mod->getSettingValue<bool>("enabled") &&
-            mod->getSettingValue<bool>("assist-enabled") && mod->getSettingValue<bool>("assist-safe-mode");
+            ((mod->getSettingValue<bool>("assist-enabled") && mod->getSettingValue<bool>("assist-safe-mode")) ||
+             mod->getSettingValue<bool>("autoplay"));
         if (want && !fields->forcedTestMode) {
             fields->savedTestMode = m_isTestMode;
             fields->forcedTestMode = true;
@@ -210,7 +232,20 @@ class $modify(CIPlayLayer, PlayLayer) {
         applyPerLevelSettings(level->m_levelID.value());
         this->loadMacroOverlay(true);
         this->updateSafeMode();
+        this->updateSpeed();
         s_recorder.clear();
+
+        if (m_fields->overlay && !Mod::get()->getSavedValue<bool>("tutorial-shown", false)) {
+            Mod::get()->setSavedValue<bool>("tutorial-shown", true);
+            FLAlertLayer::create(
+                "Click Indicator",
+                "Welcome! The <cg>green bars</c> in the level are the macro's clicks: a thin line is a tap, a wide bar is a hold. "
+                "The <cy>white line</c> is you. The <cg>lane</c> on the side shows upcoming clicks falling toward the receptor; "
+                "click when a note reaches it. <cj>PERFECT / GREAT / GOOD / MISS</c> tell you how close you were.\n\n"
+                "Press <cy>F8</c> (or the button in the pause menu) for the Click Indicator menu, with Aim Assist, recording, stats and more.",
+                "Got it"
+            )->show();
+        }
         return true;
     }
 
@@ -218,6 +253,23 @@ class $modify(CIPlayLayer, PlayLayer) {
         PlayLayer::postUpdate(dt);
         if (auto overlay = m_fields->overlay) {
             overlay->refresh(this, dt);
+
+            if (Mod::get()->getSettingValue<bool>("section-practice") && !m_hasCompletedLevel) {
+                if (overlay->sectionWantsCheckpoint(this) && m_checkpointArray && m_checkpointArray->count() == 0) {
+                    this->markCheckpoint();
+                    Notification::create("Section start: checkpoint placed", NotificationIcon::Info, 0.8f)->show();
+                }
+                if (overlay->sectionEndReached(this)) {
+                    overlay->finishAttempt(false);
+                    if (Mod::get()->getSettingValue<bool>("stats-on-death") && overlay->getStats().total() > 0) {
+                        Notification::create(
+                            fmt::format("Section: {:.0f}% accuracy, avg {:.0f} ms off", overlay->getStats().accuracy(), overlay->getStats().avgAbs()),
+                            NotificationIcon::Info
+                        )->show();
+                    }
+                    this->resetLevel();
+                }
+            }
         }
     }
 
@@ -225,6 +277,7 @@ class $modify(CIPlayLayer, PlayLayer) {
         auto fields = m_fields.self();
         // stats popup on death (before the reset wipes them)
         if (auto overlay = fields->overlay) {
+            if (m_player1 && m_player1->m_isDead) overlay->finishAttempt(false);
             if (!fields->statsShown && m_player1 && m_player1->m_isDead && !m_isPracticeMode &&
                 Mod::get()->getSettingValue<bool>("stats-on-death") && overlay->getStats().total() > 0) {
                 Notification::create(
@@ -239,6 +292,7 @@ class $modify(CIPlayLayer, PlayLayer) {
 
         if (auto overlay = fields->overlay) overlay->onReset();
         this->updateSafeMode();
+        this->updateSpeed();
 
         // recording: in practice mode keep what happened before the checkpoint, otherwise start over
         if (s_recording) {
@@ -262,6 +316,7 @@ class $modify(CIPlayLayer, PlayLayer) {
         }
 
         if (auto overlay = fields->overlay) {
+            overlay->finishAttempt(true);
             overlay->saveTrouble();
             if (Mod::get()->getSettingValue<bool>("stats-on-complete") && overlay->getStats().total() > 0) {
                 fields->statsShown = true;
@@ -271,6 +326,7 @@ class $modify(CIPlayLayer, PlayLayer) {
     }
 
     void onQuit() {
+        if (m_fields->speedApplied) CCScheduler::get()->setTimeScale(1.f);
         if (auto overlay = m_fields->overlay) overlay->saveTrouble();
         s_recording = false;
         s_recorder.clear();
@@ -284,6 +340,7 @@ void refreshOverlaySettings() {
             overlay->loadSettings();
         }
         static_cast<CIPlayLayer*>(pl)->updateSafeMode();
+        static_cast<CIPlayLayer*>(pl)->updateSpeed();
     }
 }
 
@@ -366,6 +423,32 @@ bool saveRecordingNow() {
     std::error_code ec;
     std::filesystem::create_directories(macroFolder(), ec);
     auto path = macroFolder() / (name + ".gdr.json");
+
+    // Merge: keep the existing macro's clicks outside the recorded range, use the new ones inside it
+    if (Mod::get()->getSettingValue<bool>("record-merge") && std::filesystem::is_regular_file(path, ec)) {
+        auto existing = loadMacro(path);
+        if (existing.isOk()) {
+            auto range = s_recorder.timeRange();
+            Recorder merged;
+            std::vector<Recorder::Input> evs;
+            for (auto const& p : existing.unwrap().presses) {
+                if (p.end < range.first || p.start > range.second) {
+                    evs.push_back({p.start, true, p.p2});
+                    evs.push_back({p.end, false, p.p2});
+                }
+            }
+            for (auto const& in : s_recorder.inputs()) evs.push_back(in);
+            std::stable_sort(evs.begin(), evs.end(), [](auto const& a, auto const& b) { return a.t < b.t; });
+            for (auto const& e : evs) merged.add(e.t, e.down, e.p2);
+            auto res = merged.save(path, std::string(pl->m_level->m_levelName), pl->m_level->m_levelID.value(), kRecordFramerate);
+            if (res.isErr()) {
+                Notification::create("Click Indicator: " + res.unwrapErr(), NotificationIcon::Error)->show();
+                return false;
+            }
+            return true;
+        }
+    }
+
     auto res = s_recorder.save(path, std::string(pl->m_level->m_levelName), pl->m_level->m_levelID.value(), kRecordFramerate);
     if (res.isErr()) {
         Notification::create("Click Indicator: " + res.unwrapErr(), NotificationIcon::Error)->show();
@@ -399,6 +482,92 @@ void clearPerLevelSettings() {
 
 namespace {
     bool s_assistFiring = false;
+
+    ClickOverlay* currentOverlay() {
+        auto pl = PlayLayer::get();
+        if (!pl) return nullptr;
+        return static_cast<CIPlayLayer*>(pl)->m_fields->overlay;
+    }
+
+    // Write the overlay's (possibly edited) macro back to a .gdr.json next to the original
+    Result<std::filesystem::path> saveMacroAs(Macro const& m, std::string const& suffix, bool gdr2) {
+        auto stem = m.fileName;
+        for (auto ext : {".json", ".gdr2", ".gdr"}) {
+            while (stem.size() > std::strlen(ext) && stem.ends_with(ext)) stem.erase(stem.size() - std::strlen(ext));
+        }
+        auto path = macroFolder() / (stem + suffix + (gdr2 ? ".gdr2" : ".gdr.json"));
+
+        if (gdr2) {
+            gdr::Replay<> r("ClickIndicator", 1);
+            r.framerate = m.framerate;
+            r.levelInfo = gdr::Level(m.levelName, m.levelID);
+            r.platformer = m.platformer;
+            r.gameVersion = 22081;
+            for (auto const& p : m.presses) {
+                r.inputs.push_back({static_cast<uint64_t>(std::llround(std::max(0.0, p.start) * m.framerate)), 1, p.p2, true});
+                r.inputs.push_back({static_cast<uint64_t>(std::llround(std::max(0.0, p.end) * m.framerate)), 1, p.p2, false});
+            }
+            r.sortInputs();
+            r.duration = m.presses.empty() ? 0.f : static_cast<float>(m.presses.back().end);
+            auto res = r.exportData(path);
+            if (res.isErr()) return Err(res.unwrapErr());
+            return Ok(path);
+        }
+
+        Recorder rec;
+        std::vector<std::pair<double, std::pair<bool, bool>>> evs;
+        for (auto const& p : m.presses) {
+            evs.push_back({std::max(0.0, p.start), {true, p.p2}});
+            evs.push_back({std::max(0.0, p.end), {false, p.p2}});
+        }
+        std::stable_sort(evs.begin(), evs.end(), [](auto const& a, auto const& b) { return a.first < b.first; });
+        for (auto const& e : evs) rec.add(e.first, e.second.first, e.second.second);
+        auto res = rec.save(path, m.levelName, static_cast<int>(m.levelID), m.framerate);
+        if (res.isErr()) return Err(res.unwrapErr());
+        return Ok(path);
+    }
+}
+
+bool shiftCurrentMacro(double ms) {
+    auto overlay = currentOverlay();
+    if (!overlay) return false;
+    overlay->shiftMacro(ms / 1000.0);
+    return true;
+}
+
+bool trimCurrentMacroHere() {
+    auto overlay = currentOverlay();
+    if (!overlay) return false;
+    overlay->trimMacroBefore(overlay->nowTime());
+    return true;
+}
+
+std::string saveEditedMacro() {
+    auto overlay = currentOverlay();
+    if (!overlay) return "";
+    auto res = saveMacroAs(overlay->getMacro(), " (edited)", false);
+    if (res.isErr()) {
+        Notification::create("Click Indicator: " + res.unwrapErr(), NotificationIcon::Error)->show();
+        return "";
+    }
+    return utils::string::pathToString(res.unwrap().filename());
+}
+
+std::string exportCurrentMacroGdr2() {
+    auto overlay = currentOverlay();
+    if (!overlay) return "";
+    auto res = saveMacroAs(overlay->getMacro(), "", true);
+    if (res.isErr()) {
+        Notification::create("Click Indicator: " + res.unwrapErr(), NotificationIcon::Error)->show();
+        return "";
+    }
+    return utils::string::pathToString(res.unwrap().filename());
+}
+
+std::vector<double> attemptHistory() {
+    auto overlay = currentOverlay();
+    if (!overlay) return {};
+    return overlay->history();
 }
 
 class $modify(CIBaseGameLayer, GJBaseGameLayer) {
@@ -423,6 +592,7 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         }
 
         bool p2 = !isPlayer1;
+        if (overlay->autoplayActive(pl)) return; // the bot is playing: ignore the real input
         overlay->onPlayerInput(pl, down, p2);
 
         bool holdBack = down ? overlay->assistOnPress(pl, p2) : overlay->assistOnRelease(pl, p2);
@@ -434,11 +604,13 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
     void fireAssist() {
         if (s_assistFiring) return;
         if (auto overlay = this->overlayIfPlayLayer()) {
-            overlay->assistTick(PlayLayer::get(), [this](bool down, bool p2) {
+            auto fire = [this](bool down, bool p2) {
                 s_assistFiring = true;
                 this->handleButton(down, 1, !p2);
                 s_assistFiring = false;
-            });
+            };
+            overlay->autoplayTick(PlayLayer::get(), fire);
+            overlay->assistTick(PlayLayer::get(), fire);
         }
     }
 

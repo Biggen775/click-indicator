@@ -30,3 +30,10 @@ bool perLevelEnabled();
 void savePerLevelSettings();
 void clearPerLevelSettings();
 void clearTroubleForCurrentLevel();
+
+// Macro editing (acts on the macro loaded in the current level)
+bool shiftCurrentMacro(double ms);
+bool trimCurrentMacroHere();
+std::string saveEditedMacro();        // returns the file name written, or ""
+std::string exportCurrentMacroGdr2(); // returns the file name written, or ""
+std::vector<double> attemptHistory();
