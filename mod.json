@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v1.2.3",
+	"version": "v1.3.0",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -130,7 +130,7 @@
 		"assist-enabled": {
 			"type": "bool",
 			"name": "Aim Assist",
-			"description": "If you click or release <cy>early</c>, the click is held back and sent at the exact moment the macro clicked. Late clicks go through normally.",
+			"description": "If you click <cy>early</c>, the click is held back and sent at the exact moment the macro clicked. Late clicks go through normally. At strength <cg>5</c> and up, letting go early does not end the hold: it keeps holding until the macro lets go.",
 			"default": false
 		},
 		"assist-strength": {

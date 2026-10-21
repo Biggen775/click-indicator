@@ -1,3 +1,7 @@
+# v1.3.0
+
+- Aim Assist: at strength 5 and up, letting go early no longer ends the hold. The mod keeps holding until the macro's release. Below 5, early releases are lined up only within the strength window.
+
 # v1.2.3
 
 - Fixed the big input delay introduced in v1.2.2: the timing source went back to the v1.2.1 one (player position), which lines up with the bars. The wave overhold fix stays.
