@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v1.3.0",
+	"version": "v2.0.0",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -26,13 +26,65 @@
 			"description": "Key that opens the Click Indicator menu from anywhere, even mid-level (the level pauses). You can also use the button in the pause menu.",
 			"default": "F8",
 			"one-of": [
+				"F6",
+				"F7",
 				"F8",
 				"F9",
 				"F10",
+				"F11",
+				"F12",
 				"Tab",
 				"Insert",
+				"Home",
+				"End",
 				"None"
 			]
+		},
+		"overlay-key": {
+			"type": "string",
+			"name": "Overlay Hotkey",
+			"description": "Toggles the whole indicator on/off without opening the menu.",
+			"default": "F7",
+			"one-of": [
+				"F6",
+				"F7",
+				"F8",
+				"F9",
+				"F10",
+				"F11",
+				"F12",
+				"Tab",
+				"Insert",
+				"Home",
+				"End",
+				"None"
+			]
+		},
+		"assist-key": {
+			"type": "string",
+			"name": "Aim Assist Hotkey",
+			"description": "Toggles the aim assist on/off without opening the menu.",
+			"default": "F9",
+			"one-of": [
+				"F6",
+				"F7",
+				"F8",
+				"F9",
+				"F10",
+				"F11",
+				"F12",
+				"Tab",
+				"Insert",
+				"Home",
+				"End",
+				"None"
+			]
+		},
+		"per-level": {
+			"type": "bool",
+			"name": "Remember Settings Per Level",
+			"description": "Keeps the menu settings (enabled, lane, bars, judgments, assist and strengths) separately for every level.",
+			"default": false
 		},
 		"macro-title": {
 			"type": "title",
@@ -108,6 +160,37 @@
 			"description": "Only draw clicks that are still ahead of the player.",
 			"default": true
 		},
+		"hide-after-percent": {
+			"type": "int",
+			"name": "Hide Overlay After %",
+			"description": "Hides the whole indicator once you pass this percent, to test whether you've learned the clicks. 0 = never.",
+			"default": 0,
+			"min": 0,
+			"max": 100,
+			"control": {
+				"slider": true,
+				"slider-step": 5
+			}
+		},
+		"trouble-spots": {
+			"type": "bool",
+			"name": "Trouble Spots",
+			"description": "Clicks you keep getting wrong across attempts turn red. Hitting them well again clears the red.",
+			"default": true
+		},
+		"trouble-threshold": {
+			"type": "int",
+			"name": "Trouble Spot Threshold",
+			"description": "How many bad attempts (late, early or missed) before a click turns red.",
+			"default": 3,
+			"min": 1,
+			"max": 20
+		},
+		"trouble-color": {
+			"type": "rgba",
+			"name": "Trouble Spot Color",
+			"default": "#FF4040FF"
+		},
 		"bar-color": {
 			"type": "rgba",
 			"name": "Bar Color (Player 1)",
@@ -151,6 +234,36 @@
 			"description": "While aim assist is on, the level runs like a start-pos test, so no percentage or completion is saved.",
 			"default": true
 		},
+		"assist-release-strength": {
+			"type": "int",
+			"name": "Release Strength",
+			"description": "Separate strength for letting go. <cg>0</c> = same as the press strength. 5 and up: an early release never ends the hold.",
+			"default": 0,
+			"min": 0,
+			"max": 10,
+			"control": {
+				"slider": true,
+				"slider-step": 1
+			}
+		},
+		"assist-off-percent": {
+			"type": "int",
+			"name": "Assist Off After %",
+			"description": "The assist turns itself off once you pass this percent, so the ending is all you. 0 = never.",
+			"default": 0,
+			"min": 0,
+			"max": 100,
+			"control": {
+				"slider": true,
+				"slider-step": 5
+			}
+		},
+		"assist-flash": {
+			"type": "bool",
+			"name": "Flash When Assist Kicks In",
+			"description": "Flashes the lane receptor yellow and shows ASSIST when a click was corrected.",
+			"default": true
+		},
 		"lane-title": {
 			"type": "title",
 			"name": "Rhythm Lane"
@@ -170,17 +283,34 @@
 				"Right"
 			]
 		},
-		"lane-speed": {
+		"lane-lookahead": {
 			"type": "float",
-			"name": "Lane Scroll Speed",
-			"description": "How fast notes fall in the lane (pixels per second).",
-			"default": 260,
-			"min": 80,
-			"max": 900,
+			"name": "Lane Look-Ahead (seconds)",
+			"description": "How far ahead the lane shows notes. Lower = faster scrolling.",
+			"default": 1.2,
+			"min": 0.3,
+			"max": 4.0,
 			"control": {
 				"slider": true,
-				"slider-step": 10
+				"slider-step": 0.1
 			}
+		},
+		"lane-style": {
+			"type": "string",
+			"name": "Lane Style",
+			"default": "Vertical",
+			"one-of": [
+				"Vertical",
+				"Horizontal"
+			]
+		},
+		"lane-gap": {
+			"type": "float",
+			"name": "Player 2 Lane Gap",
+			"description": "Extra space between the two lanes in 2-player levels.",
+			"default": 0,
+			"min": -20,
+			"max": 60
 		},
 		"lane-scale": {
 			"type": "float",
@@ -198,16 +328,74 @@
 			"name": "Lane Color",
 			"default": "#2BFF7AFF"
 		},
+		"p2-lane-color": {
+			"type": "rgba",
+			"name": "Lane Color (Player 2)",
+			"default": "#FF5AD2FF"
+		},
 		"show-judgments": {
 			"type": "bool",
 			"name": "Show Timing Judgments",
 			"description": "Compares your clicks to the macro and shows PERFECT / GREAT / GOOD / MISS with the offset in milliseconds.",
 			"default": true
+		},
+		"sound-title": {
+			"type": "title",
+			"name": "Click Sounds"
+		},
+		"tick-sound": {
+			"type": "bool",
+			"name": "Click Sounds",
+			"description": "Plays a tick at every macro press, like a metronome.",
+			"default": false
+		},
+		"tick-release": {
+			"type": "bool",
+			"name": "Tick On Releases Too",
+			"description": "Also plays a softer tick where holds let go.",
+			"default": false
+		},
+		"tick-volume": {
+			"type": "float",
+			"name": "Tick Volume",
+			"default": 0.6,
+			"min": 0.05,
+			"max": 1.0,
+			"control": {
+				"slider": true,
+				"slider-step": 0.05
+			}
+		},
+		"stats-title": {
+			"type": "title",
+			"name": "Stats"
+		},
+		"stats-on-complete": {
+			"type": "bool",
+			"name": "Stats Popup On Finish",
+			"default": true
+		},
+		"stats-on-death": {
+			"type": "bool",
+			"name": "Short Stats On Death",
+			"description": "A one-line accuracy summary each time you die (normal mode).",
+			"default": false
+		},
+		"record-title": {
+			"type": "title",
+			"name": "Recording"
+		},
+		"record-info": {
+			"type": "info",
+			"description": "Turn on <cy>Recording</c> in the in-game menu (Tools page), play in practice mode to 100%, and your clicks are saved as a macro named after the level."
 		}
 	},
 	"resources": {
 		"sprites": [
 			"resources/*.png"
+		],
+		"files": [
+			"resources/*.ogg"
 		]
 	}
 }

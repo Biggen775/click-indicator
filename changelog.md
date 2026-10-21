@@ -1,3 +1,15 @@
+# v2.0.0
+
+- Record your own macro: turn on Recording (Tools page), play to 100% in practice mode, and it saves `<level name>.gdr.json` into the macro folder. Checkpoints keep the clicks from before them.
+- Attempt stats: popup on level complete (accuracy, judgment counts, average offset, furthest-off clicks) and a Show Stats button. Optional one-line summary on death.
+- Trouble spots: clicks you keep getting wrong turn red in the bars and the lane. Clear Trouble button.
+- Click sounds: metronome-style tick at each macro press, optional softer tick on releases, volume slider.
+- Lane look-ahead (seconds) replaces lane speed. Horizontal (Guitar Hero style) lane mode. Player 2 lane color and gap.
+- Aim assist: separate release strength, auto-off after a percent, yellow flash + ASSIST label when a click is corrected.
+- Hide the overlay after a percent. Hotkeys to toggle the overlay (F7) and the assist (F9).
+- Macro picker in the menu, with a per-level choice. Remember settings per level.
+- Menu now has three pages: Display, Aim Assist, Tools.
+
 # v1.3.0
 
 - Aim Assist: at strength 5 and up, letting go early no longer ends the hold. The mod keeps holding until the macro's release. Below 5, early releases are lined up only within the strength window.

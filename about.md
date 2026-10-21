@@ -7,6 +7,8 @@ Shows the clicks from a macro (replay) file while you play, osu!mania style:
 - **Rhythm lane** on the side with falling notes and a receptor that lights up when you click.
 - **Aim Assist** (optional): early clicks are lined up with the macro, strength 1-10. Safe Mode keeps it from saving progress.
 - **Timing judgments** (PERFECT / GREAT / GOOD / MISS) comparing your clicks to the macro.
+- **Record your own macro** in practice mode, no bot needed.
+- **Stats, trouble spots, click sounds**, a horizontal lane, hotkeys and per-level settings.
 
 ## How to use
 
