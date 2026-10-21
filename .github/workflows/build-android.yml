@@ -1,0 +1,31 @@
+name: Build Android (experimental)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build:
+    name: Android64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read mod name and version
+        run: |
+          NAME=$(jq -r '.name' mod.json | tr ' ' '-')
+          VERSION=$(jq -r '.version' mod.json)
+          echo "ARTIFACT_NAME=${NAME}-${VERSION}-android" >> "$GITHUB_ENV"
+
+      - name: Build the mod
+        id: build
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          target: Android64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ steps.build.outputs.build-output }}
