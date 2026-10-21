@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.1.1",
+	"version": "v2.1.2",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -500,6 +500,52 @@
 			"control": {
 				"slider": true,
 				"slider-step": 10
+			}
+		},
+		"cue-sound-type": {
+			"type": "string",
+			"name": "Cue Sound",
+			"description": "Which sound the pre-click cue plays. <cy>Custom</c> uses the file below.",
+			"default": "Beep",
+			"one-of": [
+				"Beep",
+				"High Beep",
+				"Low Tone",
+				"Click",
+				"Buzz",
+				"Double Beep",
+				"Ping",
+				"Custom"
+			]
+		},
+		"cue-custom-file": {
+			"type": "file",
+			"name": "Custom Cue Sound",
+			"description": "Your own sound file for the cue (.ogg, .mp3 or .wav). Used when Cue Sound is set to Custom. Keep it short.",
+			"default": "Pick a sound file",
+			"control": {
+				"dialog": "open",
+				"filters": [
+					{
+						"description": "Sound files",
+						"files": [
+							"*.ogg",
+							"*.mp3",
+							"*.wav"
+						]
+					}
+				]
+			}
+		},
+		"cue-volume": {
+			"type": "float",
+			"name": "Cue Volume",
+			"default": 0.7,
+			"min": 0.05,
+			"max": 1.0,
+			"control": {
+				"slider": true,
+				"slider-step": 0.05
 			}
 		},
 		"stats-title": {

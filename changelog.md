@@ -1,3 +1,7 @@
+# v2.1.2
+
+- Pre-Click Cue now has 7 built-in sounds (Beep, High Beep, Low Tone, Click, Buzz, Double Beep, Ping) plus a Custom file option, its own volume slider, and a preview button in the menu.
+
 # v2.1.1
 
 - Pre-Click Cue: a heads-up sound a set number of ms before each click (Practice page, lead time in Settings).
