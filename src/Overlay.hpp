@@ -6,74 +6,106 @@
 
 #include <functional>
 #include <optional>
+#include <vector>
+
+// Stats for the current attempt
+struct AttemptStats {
+    int perfect = 0, great = 0, good = 0, bad = 0, miss = 0, extra = 0;
+    double sumAbsMs = 0.0;
+    double sumMs = 0.0;
+    int judged = 0; // clicks that had an offset (perfect..bad)
+    int assisted = 0; // inputs the aim assist corrected
+    struct Worst { int press; double ms; };
+    std::vector<Worst> worst; // sorted by |ms| desc, at most 5
+
+    void reset() { *this = AttemptStats{}; }
+    int total() const { return perfect + great + good + bad + miss; }
+    double avgAbs() const { return judged ? sumAbsMs / judged : 0.0; }
+    double avg() const { return judged ? sumMs / judged : 0.0; }
+    double accuracy() const; // 0..100
+};
 
 // Draws the hit line, the click bars and the osu!mania-style lane on top of PlayLayer.
 class ClickOverlay : public cocos2d::CCNode {
 public:
-    static ClickOverlay* create(Macro macro);
+    static ClickOverlay* create(Macro macro, int levelID);
 
-    // Called every frame from PlayLayer::postUpdate
     void refresh(PlayLayer* pl, float dt);
-    // Called from PlayLayer::resetLevel (death / restart / checkpoint)
     void onReset();
     // Called when the real player presses or releases jump
     void onPlayerInput(PlayLayer* pl, bool down, bool p2);
 
     Macro const& getMacro() const { return m_macro; }
+    AttemptStats const& getStats() const { return m_stats; }
+    // Human readable summary of the current attempt
+    std::string statsText() const;
 
-    // Re-read the mod settings (called on reset and when the in-game menu changes something)
     void loadSettings();
+    // Save trouble-spot counts to disk
+    void saveTrouble();
+    void resetTrouble();
 
     // ---- Aim assist ----
-    // Is the assist on and usable in this level right now?
     bool assistActive(PlayLayer* pl) const;
-    // Real press / release from the player. Returns true if the input should be held back.
     bool assistOnPress(PlayLayer* pl, bool p2);
     bool assistOnRelease(PlayLayer* pl, bool p2);
-    // Called every game tick: fires held-back inputs when their macro time arrives.
     void assistTick(PlayLayer* pl, std::function<void(bool down, bool p2)> const& fire);
-    // Assist window in seconds for a strength of 1..10
     static double assistWindowFor(int strength);
 
+    double currentTime(PlayLayer* pl);
+
 protected:
-    bool init(Macro macro);
+    bool init(Macro macro, int levelID);
 
 private:
     struct Settings {
         bool showBars, showHitLine, showMarkers, hidePassed;
-        bool showLane, laneRight, showJudgments;
-        float laneSpeed, laneScale, offset;
-        cocos2d::ccColor4F barColor, p2Color, lineColor, laneColor;
+        bool showLane, laneRight, laneHorizontal, showJudgments;
+        bool assistFlash, troubleSpots, tickPress, tickRelease;
+        float laneLookahead, laneScale, offset, hideAfterPercent, laneGap;
+        float tickVolume;
+        int troubleThreshold;
+        cocos2d::ccColor4F barColor, p2Color, lineColor, laneColor, p2LaneColor, troubleColor;
     };
 
     Macro m_macro;
+    int m_levelID = 0;
     Settings m_set{};
+    AttemptStats m_stats;
 
     cocos2d::CCDrawNode* m_barDraw = nullptr;
     cocos2d::CCDrawNode* m_laneDraw = nullptr;
     cocos2d::CCLabelBMFont* m_judgeLabel = nullptr;
     cocos2d::CCLabelBMFont* m_offsetLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_assistLabel = nullptr;
 
-    // Level-time -> level-X lookup table (sampled from PlayLayer::posForTime)
     bool m_prepared = false;
     bool m_usePositions = false;
     float m_tableStep = 1.f / 60.f;
     std::vector<float> m_timeTable;
 
-    // Fallback (time based) scrolling when positions are not available
     float m_pxPerSecond = 0.f;
     float m_lastPlayerX = 0.f;
     double m_lastLevelTime = -1.0;
 
     double m_now = 0.0;
     size_t m_missCursor = 0;
+    size_t m_tickCursor = 0;
     bool m_onlyPractice = false;
     bool m_enabled = true;
 
     AssistEngine m_assist[2];
     bool m_assistOn = false;
     double m_assistWindow = 0.02;
+    double m_releaseWindow = 0.02;
     bool m_assistFollowHold = false;
+    float m_assistOffPercent = 0.f;
+    float m_assistFlashTimer = 0.f;
+
+    // trouble spots: bad attempts per macro press
+    std::vector<int> m_trouble;
+    bool m_troubleDirty = false;
+
     bool m_held[2] = {false, false};
     bool m_needResync = true;
     float m_judgeTimer = 0.f;
@@ -83,11 +115,18 @@ private:
     void prepare(PlayLayer* pl);
     float xForTime(double t) const;
     double timeForX(float x) const;
-    double currentTime(PlayLayer* pl);
     void resync();
     void updateMisses();
+    void playTicks();
+    void loadTrouble();
+    void noteResult(int pressIndex, bool bad);
+    void recordJudgment(char const* text, int pressIndex, std::optional<double> ms);
     void showJudgment(char const* text, cocos2d::ccColor3B color, std::optional<double> offsetMs, bool p2);
+    void onAssisted(bool p2);
+    bool isTrouble(int pressIndex) const;
+    bool pastHidePercent(PlayLayer* pl) const;
 
     void drawBars(PlayLayer* pl);
     void drawLane(int lane, float centerX);
+    void drawLaneHorizontal(int lane, float centerY);
 };
