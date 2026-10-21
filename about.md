@@ -9,6 +9,7 @@ Shows the clicks from a macro (replay) file while you play, osu!mania style:
 - **Timing judgments** (PERFECT / GREAT / GOOD / MISS) comparing your clicks to the macro.
 - **Record your own macro** in practice mode, no bot needed.
 - **Stats, trouble spots, click sounds**, a horizontal lane, hotkeys and per-level settings.
+- **Auto-play**, section practice, progressive assist, offset trail, timeline, macro editing and .gdr2 export.
 
 ## How to use
 

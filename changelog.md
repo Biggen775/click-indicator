@@ -1,3 +1,15 @@
+# v2.1.0
+
+- Auto-Play (bot mode) with a speed slider for slow-motion study.
+- Section practice: auto checkpoint at the start percent, auto restart at the end percent.
+- Progressive assist: clean runs lower the assist strength by one.
+- Count-in beats before the first click. Next-click countdown. Level timeline across the top.
+- Offset trail: dots on the lane notes show how early/late you were (this attempt and the last).
+- Attempt history chart in the stats popup. Custom PERFECT/GREAT/GOOD windows. Themes.
+- Macro editing: shift +/-5 ms, trim before the current point, save edited, export to .gdr2. Merge recordings.
+- First-time tutorial popup. Experimental Android build workflow.
+- Menu now has four pages: Display, Aim Assist, Practice, Tools.
+
 # v2.0.0
 
 - Record your own macro: turn on Recording (Tools page), play to 100% in practice mode, and it saves `<level name>.gdr.json` into the macro folder. Checkpoints keep the clicks from before them.

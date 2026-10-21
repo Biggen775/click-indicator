@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.0.0",
+	"version": "v2.1.0",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -142,6 +142,19 @@
 			"description": "Green bars in the level where each click happens. Thin line = tap, wide bar = hold.",
 			"default": true
 		},
+		"theme": {
+			"type": "string",
+			"name": "Theme",
+			"description": "Preset color schemes. Custom uses the colors below.",
+			"default": "Classic",
+			"one-of": [
+				"Classic",
+				"osu! Pink",
+				"High Contrast",
+				"Ice",
+				"Custom"
+			]
+		},
 		"show-hit-line": {
 			"type": "bool",
 			"name": "Show Hit Line",
@@ -264,6 +277,72 @@
 			"description": "Flashes the lane receptor yellow and shows ASSIST when a click was corrected.",
 			"default": true
 		},
+		"progressive-assist": {
+			"type": "bool",
+			"name": "Progressive Assist",
+			"description": "After a clean run (no misses, at least the target accuracy) the assist strength drops by one.",
+			"default": false
+		},
+		"progressive-target": {
+			"type": "int",
+			"name": "Clean Run Target %",
+			"default": 90,
+			"min": 50,
+			"max": 100,
+			"control": {
+				"slider": true,
+				"slider-step": 5
+			}
+		},
+		"practice-title": {
+			"type": "title",
+			"name": "Practice"
+		},
+		"autoplay": {
+			"type": "bool",
+			"name": "Auto-Play (bot)",
+			"description": "Plays the macro for you so you can watch the clicks and the lane in sync. Your own clicks are ignored. Progress is never saved while it's on.",
+			"default": false
+		},
+		"autoplay-speed": {
+			"type": "float",
+			"name": "Auto-Play Speed",
+			"description": "Game speed while auto-play is on. 1.0 = normal, 0.25 = quarter speed.",
+			"default": 1.0,
+			"min": 0.25,
+			"max": 1.0,
+			"control": {
+				"slider": true,
+				"slider-step": 0.05
+			}
+		},
+		"section-practice": {
+			"type": "bool",
+			"name": "Section Practice",
+			"description": "In practice mode a checkpoint is placed at the start percent and the level restarts at the end percent.",
+			"default": false
+		},
+		"section-start": {
+			"type": "int",
+			"name": "Section Start %",
+			"default": 0,
+			"min": 0,
+			"max": 99
+		},
+		"section-end": {
+			"type": "int",
+			"name": "Section End %",
+			"description": "0 or 100 = play to the end.",
+			"default": 0,
+			"min": 0,
+			"max": 100
+		},
+		"count-in": {
+			"type": "bool",
+			"name": "Count-In Beats",
+			"description": "Three soft ticks before the first click after a restart or checkpoint.",
+			"default": false
+		},
 		"lane-title": {
 			"type": "title",
 			"name": "Rhythm Lane"
@@ -339,6 +418,45 @@
 			"description": "Compares your clicks to the macro and shows PERFECT / GREAT / GOOD / MISS with the offset in milliseconds.",
 			"default": true
 		},
+		"judge-perfect-ms": {
+			"type": "float",
+			"name": "PERFECT Window (ms)",
+			"default": 20,
+			"min": 5,
+			"max": 100
+		},
+		"judge-great-ms": {
+			"type": "float",
+			"name": "GREAT Window (ms)",
+			"default": 45,
+			"min": 10,
+			"max": 150
+		},
+		"judge-good-ms": {
+			"type": "float",
+			"name": "GOOD Window (ms)",
+			"default": 90,
+			"min": 20,
+			"max": 250
+		},
+		"offset-trail": {
+			"type": "bool",
+			"name": "Offset Trail",
+			"description": "A dot on each lane note shows how early or late you were: yellow = this attempt, white = last attempt.",
+			"default": true
+		},
+		"countdown": {
+			"type": "bool",
+			"name": "Next Click Countdown",
+			"description": "Seconds until the next click, shown near the lane when the gap is 1 second or more.",
+			"default": false
+		},
+		"timeline": {
+			"type": "bool",
+			"name": "Level Timeline",
+			"description": "A thin bar across the top with every click as a tick, trouble spots in red, and your position.",
+			"default": false
+		},
 		"sound-title": {
 			"type": "title",
 			"name": "Click Sounds"
@@ -388,6 +506,12 @@
 		"record-info": {
 			"type": "info",
 			"description": "Turn on <cy>Recording</c> in the in-game menu (Tools page), play in practice mode to 100%, and your clicks are saved as a macro named after the level."
+		},
+		"record-merge": {
+			"type": "bool",
+			"name": "Merge Recordings",
+			"description": "Saving over an existing macro with the same name only replaces the part you recorded.",
+			"default": true
 		}
 	},
 	"resources": {
