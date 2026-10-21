@@ -72,7 +72,7 @@ bool ClickMenu::init() {
     this->addToggle("Judgments", "show-judgments", {rightX, top - step}, "Shows PERFECT / GREAT / GOOD / MISS and how many ms early or late you clicked.");
     this->addLaneSideToggle({rightX, top - step * 2});
     this->addToggle("Practice Only", "only-practice", {rightX, top - step * 3}, "Only show the indicator in practice mode.");
-    this->addToggle("Aim Assist", "assist-enabled", {rightX, top - step * 4}, "If you click or release EARLY, your click is held back and sent at the exact moment the macro clicked. Late clicks go through normally. With Safe Mode on (in Settings), progress isn't saved while it's on.");
+    this->addToggle("Aim Assist", "assist-enabled", {rightX, top - step * 4}, "If you click EARLY, your click is held back and sent at the exact moment the macro clicked. Late clicks go through normally. At strength 5 and up, letting go early does NOT end the hold: it keeps holding until the macro lets go. With Safe Mode on (in Settings), progress isn't saved while it's on.");
 
     this->addStrengthRow(top - step * 5 + 2.f);
 

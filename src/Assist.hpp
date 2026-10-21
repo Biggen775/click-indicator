@@ -56,7 +56,8 @@ public:
         return true;
     }
 
-    bool onRelease(std::vector<Press> const& presses, double now, double window) {
+    // followHold: an early release never ends the hold; it waits for the macro's release
+    bool onRelease(std::vector<Press> const& presses, double now, double window, bool followHold) {
         double macroEnd = -1.0;
         if (m_active >= 0 && m_active < static_cast<int>(presses.size())) {
             macroEnd = presses[m_active].end;
@@ -73,7 +74,7 @@ public:
             return true;
         }
 
-        double releaseWindow = std::min(window, kMaxReleaseDelay);
+        double releaseWindow = followHold ? 1e300 : std::min(window, kMaxReleaseDelay);
         if (macroEnd > 0.0 && macroEnd - now > kSnapEpsilon && macroEnd - now <= releaseWindow) {
             m_events.push_back({macroEnd, false}); // released a little early: line it up
             return true;

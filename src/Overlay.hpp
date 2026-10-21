@@ -73,6 +73,7 @@ private:
     AssistEngine m_assist[2];
     bool m_assistOn = false;
     double m_assistWindow = 0.02;
+    bool m_assistFollowHold = false;
     bool m_held[2] = {false, false};
     bool m_needResync = true;
     float m_judgeTimer = 0.f;

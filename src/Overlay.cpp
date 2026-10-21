@@ -87,7 +87,9 @@ void ClickOverlay::loadSettings() {
     m_onlyPractice = mod->getSettingValue<bool>("only-practice");
     m_enabled = mod->getSettingValue<bool>("enabled");
     m_assistOn = mod->getSettingValue<bool>("assist-enabled");
-    m_assistWindow = assistWindowFor(static_cast<int>(mod->getSettingValue<int64_t>("assist-strength")));
+    int strength = static_cast<int>(mod->getSettingValue<int64_t>("assist-strength"));
+    m_assistWindow = assistWindowFor(strength);
+    m_assistFollowHold = strength >= 5;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +117,8 @@ bool ClickOverlay::assistOnPress(PlayLayer* pl, bool p2) {
 bool ClickOverlay::assistOnRelease(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
     if (!this->assistActive(pl) && !a.hasQueued()) return false;
-    return a.onRelease(m_macro.presses, this->currentTime(pl), this->assistActive(pl) ? m_assistWindow : 0.0);
+    bool active = this->assistActive(pl);
+    return a.onRelease(m_macro.presses, this->currentTime(pl), active ? m_assistWindow : 0.0, active && m_assistFollowHold);
 }
 
 void ClickOverlay::assistTick(PlayLayer* pl, std::function<void(bool, bool)> const& fire) {
