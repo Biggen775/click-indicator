@@ -33,6 +33,7 @@ private:
     void addChoiceToggle(cocos2d::CCNode* parent, cocos2d::CCMenu* menu, char const* text, char const* settingKey, char const* onValue, char const* offValue, cocos2d::CCPoint pos, char const* info);
     void addNumberRow(cocos2d::CCNode* parent, cocos2d::CCMenu* menu, char const* text, char const* settingKey, int64_t lo, int64_t hi, int64_t step, cocos2d::CCPoint pos, cocos2d::CCLabelBMFont** label, char const* suffix);
     void addLabel(cocos2d::CCNode* parent, char const* text, cocos2d::CCPoint pos, float scale);
+    void addCueSoundRow(cocos2d::CCNode* parent, cocos2d::CCMenu* menu, cocos2d::CCPoint pos);
     void updateNumberLabels();
     void updateStatus();
     void openMacroPicker();

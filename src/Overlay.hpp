@@ -83,7 +83,8 @@ private:
         bool assistFlash, troubleSpots, tickPress, tickRelease;
         bool offsetTrail, countdown, timeline, countIn, autoplay, cueSound;
         float laneLookahead, laneScale, offset, hideAfterPercent, laneGap;
-        float tickVolume, autoplaySpeed, cueLead;
+        float tickVolume, autoplaySpeed, cueLead, cueVolume;
+        std::string cuePath;
         float sectionStart, sectionEnd;
         double perfectMs, greatMs, goodMs;
         int troubleThreshold;

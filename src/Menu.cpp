@@ -319,7 +319,8 @@ void ClickMenu::buildPage() {
         this->addNumberRow(m_pageNode, menu, "Section End %", "section-end", 0, 100, 1, {rightX + 60.f, top - step * 3.f}, nullptr, "%");
         this->addLabel(m_pageNode, "End 0 or 100 = play to the end", {rightX + 60.f, top - step * 4.1f}, 0.4f);
         this->addToggle(m_pageNode, menu, "Timeline", "timeline", {rightX, top - step * 5.f}, "A thin bar across the top with every click as a tick mark (red = trouble spot), your position, and the section markers.");
-        this->addToggle(m_pageNode, menu, "Pre-Click Cue", "cue-sound", {rightX, top - step * 6.f}, "Plays a heads-up sound a little BEFORE each click, so you know one is coming. Set how early in Settings (Cue Lead, default 150 ms). Volume follows the Tick Volume slider.");
+        this->addToggle(m_pageNode, menu, "Pre-Click Cue", "cue-sound", {rightX, top - step * 6.f}, "Plays a heads-up sound a little BEFORE each click, so you know one is coming. Pick the sound with the arrows (it previews), and set how early and how loud in Settings (Cue Lead, Cue Volume). Choose Custom and pick your own .ogg/.mp3/.wav in Settings.");
+        this->addCueSoundRow(m_pageNode, menu, {leftX + 70.f, top - step * 6.6f});
     }
     else {
         // Tools: recording + stats
@@ -521,6 +522,72 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
     };
     makeArrow(false);
     makeArrow(true);
+}
+
+void ClickMenu::addCueSoundRow(CCNode* parent, CCMenu* menu, CCPoint pos) {
+    static constexpr char const* kSounds[] = {"Beep", "High Beep", "Low Tone", "Click", "Buzz", "Double Beep", "Ping", "Custom"};
+    constexpr int kCount = 8;
+
+    auto title = CCLabelBMFont::create("Cue Sound", "bigFont.fnt");
+    title->setScale(0.38f);
+    title->setPosition({pos.x, pos.y + 11.f});
+    parent->addChild(title, 10);
+
+    auto value = CCLabelBMFont::create("", "bigFont.fnt");
+    value->setScale(0.4f);
+    value->setPosition({pos.x, pos.y - 7.f});
+    parent->addChild(value, 10);
+
+    auto refresh = [value]() {
+        value->setString(Mod::get()->getSettingValue<std::string>("cue-sound-type").c_str());
+        value->limitLabelWidth(90.f, 0.4f, 0.2f);
+    };
+    refresh();
+
+    auto preview = []() {
+        // play the chosen sound once so you can hear it
+        auto name = Mod::get()->getSettingValue<std::string>("cue-sound-type");
+        std::string file = "cue-beep.ogg";
+        if (name == "High Beep") file = "cue-high.ogg";
+        else if (name == "Low Tone") file = "cue-low.ogg";
+        else if (name == "Click") file = "cue-click.ogg";
+        else if (name == "Buzz") file = "cue-buzz.ogg";
+        else if (name == "Double Beep") file = "cue-double.ogg";
+        else if (name == "Ping") file = "cue-ping.ogg";
+        std::string path = utils::string::pathToString(Mod::get()->getResourcesDir() / file);
+        if (name == "Custom") {
+            auto custom = Mod::get()->getSettingValue<std::filesystem::path>("cue-custom-file");
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(custom, ec)) path = utils::string::pathToString(custom);
+        }
+        FMODAudioEngine::sharedEngine()->playEffect(path, 1.f, 0.f, static_cast<float>(Mod::get()->getSettingValue<double>("cue-volume")));
+    };
+
+    auto makeArrow = [=](bool right) {
+        auto spr = CCSprite::createWithSpriteFrameName("navArrowBtn_001.png");
+        spr->setScale(0.4f);
+        if (!right) spr->setFlipX(true);
+        auto btn = CCMenuItemExt::createSpriteExtra(spr, [=](auto) {
+            auto cur = Mod::get()->getSettingValue<std::string>("cue-sound-type");
+            int idx = 0;
+            for (int i = 0; i < kCount; i++) if (cur == kSounds[i]) idx = i;
+            idx = (idx + (right ? 1 : kCount - 1)) % kCount;
+            Mod::get()->setSettingValue<std::string>("cue-sound-type", kSounds[idx]);
+            settingChanged();
+            refresh();
+            preview();
+        });
+        btn->setPosition({pos.x + (right ? 62.f : -62.f), pos.y - 7.f});
+        menu->addChild(btn);
+    };
+    makeArrow(false);
+    makeArrow(true);
+
+    auto playSpr = CCSprite::createWithSpriteFrameName("GJ_playMusicBtn_001.png");
+    playSpr->setScale(0.45f);
+    auto playBtn = CCMenuItemExt::createSpriteExtra(playSpr, [=](auto) { preview(); });
+    playBtn->setPosition({pos.x + 88.f, pos.y - 7.f});
+    menu->addChild(playBtn);
 }
 
 void ClickMenu::updateNumberLabels() {}

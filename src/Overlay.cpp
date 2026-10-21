@@ -22,6 +22,25 @@ namespace {
     ccColor4F mix(ccColor4F a, ccColor4F b, float t) {
         return {a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t};
     }
+    // "Beep" -> .../resources/cue-beep.ogg ; "Custom" -> the file the user picked
+    std::string cuePathFor(std::string const& name) {
+        auto res = Mod::get()->getResourcesDir();
+        if (name == "Custom") {
+            auto custom = Mod::get()->getSettingValue<std::filesystem::path>("cue-custom-file");
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(custom, ec)) return utils::string::pathToString(custom);
+            return utils::string::pathToString(res / "cue-beep.ogg");
+        }
+        std::string file = "cue-beep.ogg";
+        if (name == "High Beep") file = "cue-high.ogg";
+        else if (name == "Low Tone") file = "cue-low.ogg";
+        else if (name == "Click") file = "cue-click.ogg";
+        else if (name == "Buzz") file = "cue-buzz.ogg";
+        else if (name == "Double Beep") file = "cue-double.ogg";
+        else if (name == "Ping") file = "cue-ping.ogg";
+        return utils::string::pathToString(res / file);
+    }
+
     std::string troubleKey(int levelID, Macro const& m) {
         return fmt::format("trouble/{}/{}", levelID, m.presses.size());
     }
@@ -127,6 +146,8 @@ void ClickOverlay::loadSettings() {
     m_set.tickVolume = static_cast<float>(mod->getSettingValue<double>("tick-volume"));
     m_set.cueSound = mod->getSettingValue<bool>("cue-sound");
     m_set.cueLead = static_cast<float>(mod->getSettingValue<int64_t>("cue-lead-ms")) / 1000.f;
+    m_set.cueVolume = static_cast<float>(mod->getSettingValue<double>("cue-volume"));
+    m_set.cuePath = cuePathFor(mod->getSettingValue<std::string>("cue-sound-type"));
     m_set.assistFlash = mod->getSettingValue<bool>("assist-flash");
     m_set.offsetTrail = mod->getSettingValue<bool>("offset-trail");
     m_set.countdown = mod->getSettingValue<bool>("countdown");
@@ -561,11 +582,9 @@ void ClickOverlay::updateMisses() {
 void ClickOverlay::playTicks() {
     static std::string s_tickPath;
     static std::string s_tickUpPath;
-    static std::string s_cuePath;
     if (s_tickPath.empty()) {
         s_tickPath = utils::string::pathToString(Mod::get()->getResourcesDir() / "tick.ogg");
         s_tickUpPath = utils::string::pathToString(Mod::get()->getResourcesDir() / "tick-up.ogg");
-        s_cuePath = utils::string::pathToString(Mod::get()->getResourcesDir() / "cue.ogg");
     }
     // pre-click cue: a heads-up sound a little before each press
     if (m_set.cueSound) {
@@ -573,7 +592,7 @@ void ClickOverlay::playTicks() {
         int cued = 0;
         while (m_cueCursor < ps.size() && ps[m_cueCursor].start - m_set.cueLead <= m_now) {
             if (ps[m_cueCursor].start - m_set.cueLead > m_now - 0.25 && cued < 4) {
-                FMODAudioEngine::sharedEngine()->playEffect(s_cuePath, 1.f, 0.f, m_set.tickVolume);
+                FMODAudioEngine::sharedEngine()->playEffect(m_set.cuePath, 1.f, 0.f, m_set.cueVolume);
                 cued++;
             }
             m_cueCursor++;
