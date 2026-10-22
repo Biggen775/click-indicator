@@ -119,10 +119,8 @@ private:
     bool m_enabled = true;
 
     AssistEngine m_assist[2];
+    AssistEngine::Params m_assistParams;
     bool m_assistOn = false;
-    double m_assistWindow = 0.02;
-    double m_releaseWindow = 0.02;
-    bool m_assistFollowHold = false;
     float m_assistOffPercent = 0.f;
     float m_assistFlashTimer = 0.f;
 

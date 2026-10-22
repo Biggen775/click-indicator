@@ -293,6 +293,8 @@ void ClickMenu::buildPage() {
         this->addToggle(m_pageNode, menu, "Assist Flash", "assist-flash", {leftX, top - step}, "Flashes the lane receptor yellow and shows ASSIST whenever a click was corrected.");
         this->addToggle(m_pageNode, menu, "Safe Mode", "assist-safe-mode", {leftX, top - step * 2}, "While the assist is on, the level runs like a start-pos test so no percentage or completion is saved.");
         this->addToggle(m_pageNode, menu, "Per-Level Settings", "per-level", {leftX, top - step * 3}, "Remembers the settings on these pages separately for every level.");
+        this->addToggle(m_pageNode, menu, "Spam Assist", "spam-assist", {leftX, top - step * 4}, "For wave and ship. Extra taps while the macro is holding are absorbed (the game keeps holding). While you hold, the game follows the macro's press/release pattern for up to the Max Hold time, so holding through a spam section plays the spam. Taps that match nothing are swallowed.");
+        this->addNumberRow(m_pageNode, menu, "Spam Max Hold (s)", "spam-follow-max-ds", 5, 50, 5, {leftX + 70.f, top - step * 5.6f}, nullptr, "");
 
         this->addNumberRow(m_pageNode, menu, "Press Strength", "assist-strength", 1, 10, 1, {rightX + 60.f, top}, &m_strengthLabel, "");
         this->addNumberRow(m_pageNode, menu, "Release Strength", "assist-release-strength", 0, 10, 1, {rightX + 60.f, top - step * 1.3f}, &m_releaseLabel, "");
@@ -304,7 +306,7 @@ void ClickMenu::buildPage() {
             clearPerLevelSettings();
             Notification::create("Per-level settings cleared for this level", NotificationIcon::Info)->show();
         });
-        resetBtn->setPosition({leftX + 60.f, top - step * 4.4f});
+        resetBtn->setPosition({leftX + 60.f, top - step * 7.f});
         menu->addChild(resetBtn);
     }
     else if (m_page == 2) {
@@ -483,12 +485,15 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
 
     std::string key = settingKey, suf = suffix;
     bool speedPct = key == "autoplay-speed-pct";
-    auto getV = [key, speedPct]() -> int64_t {
+    bool followDs = key == "spam-follow-max-ds";
+    auto getV = [key, speedPct, followDs]() -> int64_t {
         if (speedPct) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>("autoplay-speed") * 100.0));
+        if (followDs) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>("spam-follow-max") * 10.0));
         return Mod::get()->getSettingValue<int64_t>(key);
     };
-    auto setV = [key, speedPct](int64_t v) {
+    auto setV = [key, speedPct, followDs](int64_t v) {
         if (speedPct) Mod::get()->setSettingValue<double>("autoplay-speed", v / 100.0);
+        else if (followDs) Mod::get()->setSettingValue<double>("spam-follow-max", v / 10.0);
         else Mod::get()->setSettingValue<int64_t>(key, v);
     };
     auto refresh = [key, suf, value, getV]() {
@@ -497,6 +502,7 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
         if (key == "assist-strength" || (key == "assist-release-strength" && v > 0)) {
             s += fmt::format(" ({:.0f}ms)", ClickOverlay::assistWindowFor(static_cast<int>(v)) * 1000.0);
         }
+        else if (key == "spam-follow-max-ds") s = fmt::format("{:.1f} s", v / 10.0);
         else if (key == "assist-release-strength") s = "same as press";
         else if (v == 0 && key != "section-start" && key != "autoplay-speed-pct") s = "never";
         else if (v == 0 && key == "section-start") s = "from start";

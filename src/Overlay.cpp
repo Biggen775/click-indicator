@@ -167,9 +167,12 @@ void ClickOverlay::loadSettings() {
     int strength = static_cast<int>(mod->getSettingValue<int64_t>("assist-strength"));
     int relStrength = static_cast<int>(mod->getSettingValue<int64_t>("assist-release-strength"));
     if (relStrength <= 0) relStrength = strength;
-    m_assistWindow = assistWindowFor(strength);
-    m_releaseWindow = assistWindowFor(relStrength);
-    m_assistFollowHold = relStrength >= 5;
+    m_assistParams.pressWindow = assistWindowFor(strength);
+    m_assistParams.releaseWindow = assistWindowFor(relStrength);
+    m_assistParams.followHold = relStrength >= 5;
+    m_assistParams.spam = mod->getSettingValue<bool>("spam-assist");
+    m_assistParams.followMax = mod->getSettingValue<double>("spam-follow-max");
+    m_assistParams.followGap = mod->getSettingValue<double>("spam-follow-gap");
     m_assistOffPercent = static_cast<float>(mod->getSettingValue<int64_t>("assist-off-percent"));
 }
 
@@ -413,7 +416,9 @@ bool ClickOverlay::assistOnPress(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
     bool active = this->assistActive(pl);
     if (!active && !a.hasQueued()) return false;
-    bool held = a.onPress(m_macro.presses, p2, this->currentTime(pl), active ? m_assistWindow : 0.0);
+    AssistEngine::Params prm = m_assistParams;
+    if (!active) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.followHold = false; }
+    bool held = a.onPress(m_macro.presses, p2, this->currentTime(pl), prm);
     if (held) this->onAssisted(p2);
     return held;
 }
@@ -422,7 +427,9 @@ bool ClickOverlay::assistOnRelease(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
     bool active = this->assistActive(pl);
     if (!active && !a.hasQueued()) return false;
-    bool held = a.onRelease(m_macro.presses, this->currentTime(pl), active ? m_releaseWindow : 0.0, active && m_assistFollowHold);
+    AssistEngine::Params prm = m_assistParams;
+    if (!active) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.followHold = false; }
+    bool held = a.onRelease(m_macro.presses, this->currentTime(pl), prm);
     if (held) this->onAssisted(p2);
     return held;
 }
@@ -431,11 +438,11 @@ void ClickOverlay::assistTick(PlayLayer* pl, std::function<void(bool, bool)> con
     bool active = this->assistActive(pl);
     for (int p = 0; p < 2; p++) {
         auto& a = m_assist[p];
-        if (!a.hasQueued()) continue;
+        if (!a.needsTick()) continue;
         bool p2 = p == 1;
         auto send = [&](bool down) { fire(down, p2); };
         // half a tick of tolerance so a click due on this tick is never pushed to the next one
-        if (active) a.tick(this->currentTime(pl) + 0.5 / m_macro.framerate, send);
+        if (active) a.tick(m_macro.presses, p2, this->currentTime(pl) + 0.5 / m_macro.framerate, m_assistParams, send);
         else a.flush(send); // assist turned off mid-level: send what's waiting right away
     }
 }
