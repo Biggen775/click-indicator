@@ -1,3 +1,7 @@
+# v2.2.0
+
+- Aim Assist rewritten around holds and spam (wave / ship): extra taps during a macro hold are absorbed, holding through a spam section follows the macro's pattern, a late press into a long hold joins it, and stray taps that match nothing are swallowed. Spam Assist toggle + Max Hold / Max Gap settings.
+
 # v2.1.2
 
 - Pre-Click Cue now has 7 built-in sounds (Beep, High Beep, Low Tone, Click, Buzz, Double Beep, Ping) plus a Custom file option, its own volume slider, and a preview button in the menu.

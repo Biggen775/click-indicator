@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.1.2",
+	"version": "v2.2.0",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -276,6 +276,36 @@
 			"name": "Flash When Assist Kicks In",
 			"description": "Flashes the lane receptor yellow and shows ASSIST when a click was corrected.",
 			"default": true
+		},
+		"spam-assist": {
+			"type": "bool",
+			"name": "Spam Assist (wave / ship)",
+			"description": "Extra taps while the macro is holding are absorbed. While you hold, the game follows the macro's press/release pattern (up to Max Hold). Taps that match nothing in the macro are swallowed.",
+			"default": true
+		},
+		"spam-follow-max": {
+			"type": "float",
+			"name": "Spam Assist Max Hold (s)",
+			"description": "How long a single physical hold may follow the macro's pattern.",
+			"default": 2.0,
+			"min": 0.5,
+			"max": 5.0,
+			"control": {
+				"slider": true,
+				"slider-step": 0.5
+			}
+		},
+		"spam-follow-gap": {
+			"type": "float",
+			"name": "Spam Assist Max Gap (s)",
+			"description": "The pattern-follow stops if the next macro press is further away than this.",
+			"default": 0.4,
+			"min": 0.1,
+			"max": 1.0,
+			"control": {
+				"slider": true,
+				"slider-step": 0.05
+			}
 		},
 		"progressive-assist": {
 			"type": "bool",
