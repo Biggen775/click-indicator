@@ -1,3 +1,8 @@
+# v2.3.1
+
+- Recording and playback now share one clock snapshot per game tick, so a recorded click replays on exactly the tick it was made.
+- Release Offset default back to 0 (the +12 ms was a workaround for the old clock and made assisted releases late).
+
 # v2.3.0
 
 - Timing rework: the mod now runs on the game's own level clock (the one macro bots count frames from) instead of converting the player's position to a time. This fixes bars/lane sitting early, assisted releases coming early, and recordings not lining up. Bar positions are corrected live against the real player position.
