@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.2.1",
+	"version": "v2.2.2",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -305,6 +305,30 @@
 			"control": {
 				"slider": true,
 				"slider-step": 0.05
+			}
+		},
+		"release-offset-ms": {
+			"type": "float",
+			"name": "Release Offset (ms)",
+			"description": "Shifts every assisted release later (positive) or earlier (negative). If the assist lets go too early in wave or ship, raise this.",
+			"default": 12,
+			"min": -50,
+			"max": 80,
+			"control": {
+				"slider": true,
+				"slider-step": 1
+			}
+		},
+		"hold-slack-ms": {
+			"type": "float",
+			"name": "Hold Slack (ms)",
+			"description": "If you are still holding when the macro lets go, the assist waits this long for your own release before releasing for you. Only applies to presses you made yourself, not to the spam pattern-follow.",
+			"default": 40,
+			"min": 0,
+			"max": 150,
+			"control": {
+				"slider": true,
+				"slider-step": 5
 			}
 		},
 		"progressive-assist": {

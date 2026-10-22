@@ -1,3 +1,8 @@
+# v2.2.2
+
+- Release Offset (default +12 ms): shifts every assisted release later, for macros whose releases sit a touch early in wave/ship.
+- Hold Slack (default 40 ms): if you're still holding at the macro's end, the assist waits for your own release before releasing for you.
+
 # v2.2.1
 
 - Fixed Spam Assist eating clicks: a click outside the strength window but near a macro press (within 150 ms) now goes through normally. Only taps with nothing in the macro anywhere near them are swallowed.
