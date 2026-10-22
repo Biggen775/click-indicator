@@ -1,4 +1,5 @@
 #include "Overlay.hpp"
+#include "TickClock.hpp"
 
 #include <Geode/utils/string.hpp>
 
@@ -533,7 +534,7 @@ double ClickOverlay::currentTime(PlayLayer* pl) {
     // The game's own level clock: this is what macro bots (xdBot, Eclipse, ...) count their
     // frames from, so timing here lines up with the macro exactly. Position-based timing
     // (posForTime) is only used to place the bars in the level, with a live correction.
-    return pl->m_gameState.m_levelTime + m_clockOffset;
+    return TickClock::now(pl->m_gameState.m_levelTime) + m_clockOffset;
 }
 
 // ---------------------------------------------------------------------------

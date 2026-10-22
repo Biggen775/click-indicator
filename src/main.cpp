@@ -10,6 +10,7 @@
 #include "Menu.hpp"
 #include "Recorder.hpp"
 #include "Shared.hpp"
+#include "TickClock.hpp"
 
 #include <gdr/gdr.hpp>
 
@@ -225,7 +226,7 @@ class $modify(CIPlayLayer, PlayLayer) {
     // Recording uses the game's own level clock (what macro bots count frames from),
     // without the user's timing offset, so the file matches other bots' macros.
     double recordClock() {
-        return m_gameState.m_levelTime;
+        return TickClock::now(m_gameState.m_levelTime);
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -620,13 +621,27 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         }
     }
 
+    // One clock snapshot per tick, taken right before the game applies this tick's inputs.
+    // Recording stamps real inputs with it and playback fires from it, so a recorded click
+    // replays on exactly the tick it was made.
     void processQueuedButtons(float dt, bool clearInputQueue) {
-        this->fireAssist();
+        if (PlayLayer::get() == static_cast<GJBaseGameLayer*>(this)) {
+            TickClock::begin(m_gameState.m_levelTime);
+            this->fireAssist();
+            GJBaseGameLayer::processQueuedButtons(dt, clearInputQueue);
+            TickClock::end();
+            return;
+        }
         GJBaseGameLayer::processQueuedButtons(dt, clearInputQueue);
     }
 
     void processCommands(float dt, bool isHalfTick, bool isLastTick) {
-        this->fireAssist();
+        // fallback in case the input queue wasn't processed this tick
+        if (PlayLayer::get() == static_cast<GJBaseGameLayer*>(this) && !TickClock::firedThisTick(m_gameState.m_levelTime)) {
+            TickClock::begin(m_gameState.m_levelTime);
+            this->fireAssist();
+            TickClock::end();
+        }
         GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
     }
 };
