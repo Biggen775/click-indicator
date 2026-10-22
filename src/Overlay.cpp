@@ -173,6 +173,8 @@ void ClickOverlay::loadSettings() {
     m_assistParams.spam = mod->getSettingValue<bool>("spam-assist");
     m_assistParams.followMax = mod->getSettingValue<double>("spam-follow-max");
     m_assistParams.followGap = mod->getSettingValue<double>("spam-follow-gap");
+    m_assistParams.releaseOffset = mod->getSettingValue<double>("release-offset-ms") / 1000.0;
+    m_assistParams.holdSlack = mod->getSettingValue<double>("hold-slack-ms") / 1000.0;
     m_assistOffPercent = static_cast<float>(mod->getSettingValue<int64_t>("assist-off-percent"));
 }
 

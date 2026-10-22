@@ -300,7 +300,8 @@ void ClickMenu::buildPage() {
         this->addNumberRow(m_pageNode, menu, "Release Strength", "assist-release-strength", 0, 10, 1, {rightX + 60.f, top - step * 1.3f}, &m_releaseLabel, "");
         this->addNumberRow(m_pageNode, menu, "Assist Off At %", "assist-off-percent", 0, 100, 5, {rightX + 60.f, top - step * 2.6f}, nullptr, "%");
         this->addNumberRow(m_pageNode, menu, "Hide Overlay At %", "hide-after-percent", 0, 100, 5, {rightX + 60.f, top - step * 3.9f}, nullptr, "%");
-        this->addLabel(m_pageNode, "0 = never. Release 0 = same as press.", {rightX + 60.f, top - step * 5.f}, 0.4f);
+        this->addNumberRow(m_pageNode, menu, "Release Offset (ms)", "release-offset-ms", -50, 80, 2, {rightX + 60.f, top - step * 5.2f}, nullptr, "ms");
+        this->addLabel(m_pageNode, "Releases too early? raise Release Offset.", {rightX + 60.f, top - step * 6.3f}, 0.38f);
         auto resetSpr = ButtonSprite::create("Reset Level Prefs", "goldFont.fnt", "GJ_button_06.png", 0.5f);
         auto resetBtn = CCMenuItemExt::createSpriteExtra(resetSpr, [](auto) {
             clearPerLevelSettings();
@@ -486,14 +487,17 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
     std::string key = settingKey, suf = suffix;
     bool speedPct = key == "autoplay-speed-pct";
     bool followDs = key == "spam-follow-max-ds";
-    auto getV = [key, speedPct, followDs]() -> int64_t {
+    bool isFloat = key == "release-offset-ms";
+    auto getV = [key, speedPct, followDs, isFloat]() -> int64_t {
         if (speedPct) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>("autoplay-speed") * 100.0));
         if (followDs) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>("spam-follow-max") * 10.0));
+        if (isFloat) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>(key)));
         return Mod::get()->getSettingValue<int64_t>(key);
     };
-    auto setV = [key, speedPct, followDs](int64_t v) {
+    auto setV = [key, speedPct, followDs, isFloat](int64_t v) {
         if (speedPct) Mod::get()->setSettingValue<double>("autoplay-speed", v / 100.0);
         else if (followDs) Mod::get()->setSettingValue<double>("spam-follow-max", v / 10.0);
+        else if (isFloat) Mod::get()->setSettingValue<double>(key, static_cast<double>(v));
         else Mod::get()->setSettingValue<int64_t>(key, v);
     };
     auto refresh = [key, suf, value, getV]() {
@@ -503,6 +507,7 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
             s += fmt::format(" ({:.0f}ms)", ClickOverlay::assistWindowFor(static_cast<int>(v)) * 1000.0);
         }
         else if (key == "spam-follow-max-ds") s = fmt::format("{:.1f} s", v / 10.0);
+        else if (key == "release-offset-ms") s = fmt::format("{:+d} ms", static_cast<int>(v));
         else if (key == "assist-release-strength") s = "same as press";
         else if (v == 0 && key != "section-start" && key != "autoplay-speed-pct") s = "never";
         else if (v == 0 && key == "section-start") s = "from start";

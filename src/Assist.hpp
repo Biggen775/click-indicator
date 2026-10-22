@@ -27,6 +27,8 @@ public:
         bool spam = false;           // spam assist on/off
         double followMax = 2.0;      // seconds the pattern-follow may run per physical hold
         double followGap = 0.4;      // max gap between macro presses to keep following
+        double releaseOffset = 0.0;  // shifts every assisted release later (+) or earlier (-)
+        double holdSlack = 0.04;     // still holding at the macro's end: wait this long for the player's own release
     };
 
     static constexpr double kGap = 1.0 / 240.0 + 0.0002;
@@ -39,6 +41,7 @@ public:
         m_gameDown = false;
         m_physDown = false;
         m_swallowedPress = false;
+        m_inFollow = false;
         m_active = -1;
         m_lastUsed = -1;
     }
@@ -53,8 +56,10 @@ public:
         m_swallowedPress = false;
 
         // Inside an active macro hold (the game is holding, release queued or still ahead)
+        m_inFollow = false;
         if (m_active >= 0 && m_gameDown) {
-            double end = m_active < static_cast<int>(presses.size()) ? presses[m_active].end : now;
+            double end = this->endOf(presses, m_active, prm);
+            if (end < 0.0) end = now;
             if (prm.spam && end > now + kSnapEpsilon) {
                 // a re-press while the macro still holds: absorb it, the game keeps holding
                 this->dropQueuedReleases();
@@ -132,8 +137,7 @@ public:
             return true; // the press never reached the game
         }
 
-        double macroEnd = -1.0;
-        if (m_active >= 0 && m_active < static_cast<int>(presses.size())) macroEnd = presses[m_active].end;
+        double macroEnd = this->endOf(presses, m_active, prm);
 
         if (!m_events.empty()) {
             if (!m_events.back().down) return true; // a release is already waiting
@@ -173,9 +177,10 @@ public:
             m_events.pop_front();
             m_gameDown = ev.down;
             fire(ev.down);
-            if (ev.down && prm.spam && m_physDown && m_active >= 0 && m_events.empty()) {
+            if (ev.down && ev.chained) m_inFollow = true;
+            if (ev.down && prm.spam && m_physDown && m_active >= 0 && m_events.empty() && ev.chained) {
                 // a follow-press just went out: its release comes at the macro's end
-                m_events.push_back({std::max(presses[m_active].end, ev.t + kGap), false});
+                m_events.push_back({std::max(this->endOf(presses, m_active, prm), ev.t + kGap), false});
             }
             if (!ev.down && m_events.empty()) {
                 if (!this->chainNext(presses, p2, now, prm)) m_active = -1;
@@ -183,8 +188,19 @@ public:
         }
 
         // Still physically holding through the macro's release? follow the pattern.
+        // (a press the player made themselves gets `holdSlack` of grace first, so the release is
+        //  theirs if they let go around the right time; follow-presses release exactly on the macro)
+        double slack = m_inFollow ? 0.0 : prm.holdSlack;
+        if (slack > 0.0 && m_active >= 0) {
+            // no slack inside a spam section: the next macro press comes right after this one
+            for (int i = m_active + 1; i < static_cast<int>(presses.size()); i++) {
+                if (presses[i].p2 != p2) continue;
+                if (presses[i].start - presses[m_active].end < slack + 0.05) slack = 0.0;
+                break;
+            }
+        }
         if (prm.spam && m_physDown && m_gameDown && m_active >= 0 && m_events.empty() &&
-            m_active < static_cast<int>(presses.size()) && presses[m_active].end <= now &&
+            m_active < static_cast<int>(presses.size()) && this->endOf(presses, m_active, prm) + slack <= now &&
             now - m_physDownAt <= prm.followMax) {
             m_gameDown = false;
             fire(false);
@@ -214,9 +230,15 @@ private:
     bool m_gameDown = false;
     bool m_physDown = false;
     bool m_swallowedPress = false;
+    bool m_inFollow = false;
     double m_physDownAt = 0.0;
     int m_active = -1;
     int m_lastUsed = -1;
+
+    double endOf(std::vector<Press> const& presses, int idx, Params const& prm) const {
+        if (idx < 0 || idx >= static_cast<int>(presses.size())) return -1.0;
+        return presses[idx].end + prm.releaseOffset;
+    }
 
     void dropQueuedReleases() {
         while (!m_events.empty() && !m_events.back().down) m_events.pop_back();
