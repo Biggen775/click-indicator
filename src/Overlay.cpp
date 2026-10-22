@@ -109,12 +109,6 @@ bool ClickOverlay::init(Macro macro, int levelID) {
     this->loadTrouble();
     this->loadHistory();
 
-    // Apply the timing offset once
-    double offset = m_set.offset / 1000.0;
-    for (auto& p : m_macro.presses) {
-        p.start += offset;
-        p.end += offset;
-    }
     return true;
 }
 
@@ -132,6 +126,7 @@ void ClickOverlay::loadSettings() {
     m_set.laneScale = static_cast<float>(mod->getSettingValue<double>("lane-scale"));
     m_set.laneGap = static_cast<float>(mod->getSettingValue<double>("lane-gap"));
     m_set.offset = static_cast<float>(mod->getSettingValue<double>("offset-ms"));
+    m_clockOffset = -m_set.offset / 1000.0; // positive setting = macro later = clock earlier
     m_set.hideAfterPercent = static_cast<float>(mod->getSettingValue<int64_t>("hide-after-percent"));
     m_set.barColor = toColor4F(mod->getSettingValue<ccColor4B>("bar-color"));
     m_set.p2Color = toColor4F(mod->getSettingValue<ccColor4B>("p2-color"));
@@ -416,36 +411,44 @@ void ClickOverlay::onAssisted(bool p2) {
 
 bool ClickOverlay::assistOnPress(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
-    bool active = this->assistActive(pl);
-    if (!active && !a.hasQueued()) return false;
+    if (!this->assistActive(pl) && !a.busy()) return false;
     AssistEngine::Params prm = m_assistParams;
-    if (!active) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.followHold = false; }
-    bool held = a.onPress(m_macro.presses, p2, this->currentTime(pl), prm);
-    if (held) this->onAssisted(p2);
-    return held;
+    if (!this->assistActive(pl)) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.followHold = false; }
+    bool wasDown = a.gameDown();
+    bool sentNow = false;
+    a.onPress(m_macro.presses, p2, this->currentTime(pl), prm, [&](bool down) {
+        if (m_fire) m_fire(down, p2);
+        sentNow = true;
+    });
+    if (!sentNow || a.gameDown() == wasDown) this->onAssisted(p2);
+    return true; // the engine sends the game input itself
 }
 
 bool ClickOverlay::assistOnRelease(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
-    bool active = this->assistActive(pl);
-    if (!active && !a.hasQueued()) return false;
+    if (!this->assistActive(pl) && !a.busy()) return false;
     AssistEngine::Params prm = m_assistParams;
-    if (!active) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.followHold = false; }
-    bool held = a.onRelease(m_macro.presses, this->currentTime(pl), prm);
-    if (held) this->onAssisted(p2);
-    return held;
+    if (!this->assistActive(pl)) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.followHold = false; }
+    bool sentNow = false;
+    a.onRelease(m_macro.presses, p2, this->currentTime(pl), prm, [&](bool down) {
+        if (m_fire) m_fire(down, p2);
+        sentNow = true;
+    });
+    if (!sentNow) this->onAssisted(p2);
+    return true;
 }
 
 void ClickOverlay::assistTick(PlayLayer* pl, std::function<void(bool, bool)> const& fire) {
+    m_fire = fire;
     bool active = this->assistActive(pl);
     for (int p = 0; p < 2; p++) {
         auto& a = m_assist[p];
-        if (!a.needsTick()) continue;
+        if (!a.busy()) continue;
         bool p2 = p == 1;
         auto send = [&](bool down) { fire(down, p2); };
         // half a tick of tolerance so a click due on this tick is never pushed to the next one
-        if (active) a.tick(m_macro.presses, p2, this->currentTime(pl) + 0.5 / m_macro.framerate, m_assistParams, send);
-        else a.flush(send); // assist turned off mid-level: send what's waiting right away
+        if (active) a.evaluate(m_macro.presses, p2, this->currentTime(pl) + 0.5 / m_macro.framerate, m_assistParams, send);
+        else a.flush(send);
     }
 }
 
@@ -527,12 +530,10 @@ double ClickOverlay::timeForX(float x) const {
 }
 
 double ClickOverlay::currentTime(PlayLayer* pl) {
-    // Go by where the player is in the level (matches the bars exactly). The game's
-    // tick counter turned out not to track macro frames, so it is no longer used.
-    if (m_usePositions && pl->m_player1) {
-        return this->timeForX(pl->m_player1->getPositionX());
-    }
-    return pl->m_gameState.m_levelTime;
+    // The game's own level clock: this is what macro bots (xdBot, Eclipse, ...) count their
+    // frames from, so timing here lines up with the macro exactly. Position-based timing
+    // (posForTime) is only used to place the bars in the level, with a live correction.
+    return pl->m_gameState.m_levelTime + m_clockOffset;
 }
 
 // ---------------------------------------------------------------------------
@@ -549,6 +550,7 @@ void ClickOverlay::onReset() {
     m_assist[1].reset();
     m_stats.reset();
     m_autoResync = true;
+    m_xDeltaValid = false;
     // keep last attempt's offsets for the trail, start a fresh set
     if (!m_curOffsets.empty()) m_lastOffsets = m_curOffsets;
     m_curOffsets.assign(m_macro.presses.size(), 9999.f);
@@ -843,6 +845,18 @@ void ClickOverlay::drawBars(PlayLayer* pl) {
 
     CCPoint p1World = pl->m_player1->getPosition();
     CCPoint p1 = toScreen(p1World);
+
+    // posForTime(t) and the player's real X at level time t differ by a (nearly constant) offset;
+    // measure it live so the bars sit exactly where the clicks happen
+    if (m_usePositions) {
+        float predicted = this->xForTime(pl->m_gameState.m_levelTime);
+        float delta = p1World.x - predicted;
+        if (std::isfinite(delta) && std::abs(delta) < 2000.f) {
+            m_xDelta = m_xDeltaValid ? m_xDelta * 0.8f + delta * 0.2f : delta;
+            m_xDeltaValid = true;
+        }
+    }
+    float xd = m_xDeltaValid ? m_xDelta : 0.f;
     CCPoint p2 = pl->m_player2 ? toScreen(pl->m_player2->getPosition()) : p1;
     float hitX = p1.x;
 
@@ -865,10 +879,10 @@ void ClickOverlay::drawBars(PlayLayer* pl) {
         }
 
         auto screenStart = [&](Press const& p) {
-            return m_usePositions ? a * p.startX + b : hitX + dir * static_cast<float>(p.start - m_now) * m_pxPerSecond * std::abs(a);
+            return m_usePositions ? a * (p.startX + xd) + b : hitX + dir * static_cast<float>(p.start - m_now) * m_pxPerSecond * std::abs(a);
         };
         auto screenEnd = [&](Press const& p) {
-            return m_usePositions ? a * p.endX + b : hitX + dir * static_cast<float>(p.end - m_now) * m_pxPerSecond * std::abs(a);
+            return m_usePositions ? a * (p.endX + xd) + b : hitX + dir * static_cast<float>(p.end - m_now) * m_pxPerSecond * std::abs(a);
         };
 
         // Only look at presses that can be on screen: from a few seconds back to the right edge

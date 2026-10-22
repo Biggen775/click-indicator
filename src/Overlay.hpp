@@ -50,6 +50,7 @@ public:
     bool assistOnPress(PlayLayer* pl, bool p2);
     bool assistOnRelease(PlayLayer* pl, bool p2);
     void assistTick(PlayLayer* pl, std::function<void(bool down, bool p2)> const& fire);
+    void setFire(std::function<void(bool down, bool p2)> fire) { m_fire = std::move(fire); }
     static double assistWindowFor(int strength);
 
     double currentTime(PlayLayer* pl);
@@ -119,6 +120,10 @@ private:
     bool m_enabled = true;
 
     AssistEngine m_assist[2];
+    std::function<void(bool, bool)> m_fire; // sends a game input (set by assistTick)
+    double m_clockOffset = 0.0;
+    float m_xDelta = 0.f;
+    bool m_xDeltaValid = false;
     AssistEngine::Params m_assistParams;
     bool m_assistOn = false;
     float m_assistOffPercent = 0.f;

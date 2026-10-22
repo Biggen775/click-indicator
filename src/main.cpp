@@ -222,8 +222,9 @@ class $modify(CIPlayLayer, PlayLayer) {
         return true;
     }
 
+    // Recording uses the game's own level clock (what macro bots count frames from),
+    // without the user's timing offset, so the file matches other bots' macros.
     double recordClock() {
-        if (auto overlay = m_fields->overlay) return overlay->currentTime(this);
         return m_gameState.m_levelTime;
     }
 
@@ -595,8 +596,13 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         if (overlay->autoplayActive(pl)) return; // the bot is playing: ignore the real input
         overlay->onPlayerInput(pl, down, p2);
 
-        bool holdBack = down ? overlay->assistOnPress(pl, p2) : overlay->assistOnRelease(pl, p2);
-        if (!holdBack) {
+        overlay->setFire([this](bool d, bool pp2) {
+            s_assistFiring = true;
+            this->handleButton(d, 1, !pp2);
+            s_assistFiring = false;
+        });
+        bool handled = down ? overlay->assistOnPress(pl, p2) : overlay->assistOnRelease(pl, p2);
+        if (!handled) {
             GJBaseGameLayer::handleButton(down, button, isPlayer1);
         }
     }
