@@ -1,3 +1,7 @@
+# v2.2.1
+
+- Fixed Spam Assist eating clicks: a click outside the strength window but near a macro press (within 150 ms) now goes through normally. Only taps with nothing in the macro anywhere near them are swallowed.
+
 # v2.2.0
 
 - Aim Assist rewritten around holds and spam (wave / ship): extra taps during a macro hold are absorbed, holding through a spam section follows the macro's pattern, a late press into a long hold joins it, and stray taps that match nothing are swallowed. Spam Assist toggle + Max Hold / Max Gap settings.
