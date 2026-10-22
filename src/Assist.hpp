@@ -32,6 +32,7 @@ public:
     static constexpr double kGap = 1.0 / 240.0 + 0.0002;
     static constexpr double kMaxReleaseDelay = 0.1;
     static constexpr double kSnapEpsilon = 0.002;
+    static constexpr double kStrayWindow = 0.15; // a tap further than this from any macro press is "stray"
 
     void reset() {
         m_events.clear();
@@ -67,7 +68,7 @@ public:
             int same = this->findMatch(presses, p2, now, prm.pressWindow, false);
             if (same >= 0 && same == m_active) return true;
             // a release is waiting: keep order, press after it
-            int match = this->findMatch(presses, p2, now, prm.pressWindow, true);
+            int match = this->findMatch(presses, p2, now, std::max(prm.pressWindow, kStrayWindow), true);
             double target = m_events.back().t + kGap;
             if (match >= 0) {
                 target = std::max(target, presses[match].start);
@@ -100,8 +101,19 @@ public:
             return false;
         }
 
+        // Outside the strength window but still near a macro press: a normal (unassisted) click
+        // that belongs to that press, so its release can follow the macro's end.
+        double nearWindow = std::max(prm.pressWindow, kStrayWindow);
+        int nearIdx = this->findMatch(presses, p2, now, nearWindow, true);
+        if (nearIdx >= 0) {
+            m_lastUsed = nearIdx;
+            m_active = nearIdx;
+            m_gameDown = true;
+            return false;
+        }
+
         if (prm.spam) {
-            // nothing in the macro here: an extra tap, swallow it
+            // nothing in the macro anywhere near here: an extra tap, swallow it
             m_swallowedPress = true;
             m_active = -1;
             return true;
