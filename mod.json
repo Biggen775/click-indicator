@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.2.2",
+	"version": "v2.3.0",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -118,7 +118,7 @@
 		"offset-ms": {
 			"type": "float",
 			"name": "Timing Offset (ms)",
-			"description": "Shifts every click earlier (negative) or later (positive) if the bars look slightly off.",
+			"description": "Shifts the whole macro later (positive) or earlier (negative) relative to the game. Use the Stats popup: if your average offset reads, say, -15 ms (you look early), set this to -15 so a macro from another bot lines up.",
 			"default": 0,
 			"min": -200,
 			"max": 200,

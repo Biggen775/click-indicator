@@ -1,3 +1,9 @@
+# v2.3.0
+
+- Timing rework: the mod now runs on the game's own level clock (the one macro bots count frames from) instead of converting the player's position to a time. This fixes bars/lane sitting early, assisted releases coming early, and recordings not lining up. Bar positions are corrected live against the real player position.
+- Aim Assist rebuilt as a per-tick rule instead of an event queue: early taps and holds, spam-during-hold, hold-through-spam, late entry into holds, stray taps and hold slack all follow the same few rules. 15 simulated wave/ship scenarios pass.
+- Recorder stamps clicks with the raw game clock.
+
 # v2.2.2
 
 - Release Offset (default +12 ms): shifts every assisted release later, for macros whose releases sit a touch early in wave/ship.
