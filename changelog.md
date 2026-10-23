@@ -1,3 +1,14 @@
+# v2.3.5
+
+Found from the diagnostic log you sent:
+
+- **Auto-play released holds immediately** when two clicks were less than 200 ms apart (it released the hold as soon as the *previous* click's release time passed). This is why the replay of your own recording died at the same spot every time. Fixed: each hold is tracked by its own click.
+- **Aim Assist never acted in that session** (nothing was fired, your early clicks went straight through). The log could not say why, so now: the on-screen "ASSIST" label stays dim while the assist is active and turns red with the reason when it is sitting out ("ASSIST OFF: practice only", "past 90%", "indicator is off"), and the log records the reason and what the assist decided for every click.
+- **Percent-based options used the game's attempt-relative percent**, which from a start pos reaches 100% a few seconds in. Assist Off After %, Hide Overlay At % and section practice now use the real level percent.
+- **"Only While Practicing" counts playing from a start pos as practicing.**
+- **Macro timing matches xdBot exactly.** Bots stamp an input with frame = int(levelTime*fps)+1, so frame F happened on the tick whose clock read (F-1)/fps; the mod placed it one tick (4 ms) late. Bars, judgments, assist presses and releases all moved to the correct tick.
+- **Sub-tick exact recordings.** New recordings store the exact clock reading next to the frame number, so they replay on the exact physics step even with physics bypass / high TPS. Firing now has no half-tick slack (that fired early at high TPS).
+
 # v2.3.4
 
 - Diagnostic Log (Tools page): records clicks, assisted clicks, positions, clocks and deaths to diag.log so timing problems can be analysed from a file.

@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.3.4",
+	"version": "v2.3.5",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -129,7 +129,8 @@
 		},
 		"only-practice": {
 			"type": "bool",
-			"name": "Only In Practice Mode",
+			"name": "Only While Practicing",
+			"description": "Show the indicator (and let Aim Assist act) only in practice mode or when playing from a start pos. Off = always.",
 			"default": false
 		},
 		"level-title": {
