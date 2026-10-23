@@ -169,6 +169,7 @@ void ClickOverlay::loadSettings() {
     this->applyTheme(mod->getSettingValue<std::string>("theme"));
     m_onlyPractice = mod->getSettingValue<bool>("only-practice");
     m_enabled = mod->getSettingValue<bool>("enabled");
+    m_alignMode = mod->getSettingValue<std::string>("macro-start");
     m_assistOn = mod->getSettingValue<bool>("assist-enabled");
     int strength = static_cast<int>(mod->getSettingValue<int64_t>("assist-strength"));
     int relStrength = static_cast<int>(mod->getSettingValue<int64_t>("assist-release-strength"));
@@ -373,6 +374,40 @@ bool ClickOverlay::sectionWantsCheckpoint(PlayLayer* pl) {
         return true;
     }
     return false;
+}
+
+void ClickOverlay::alignForAttempt(PlayLayer* pl, bool freshStart) {
+    if (!freshStart || !pl || m_macro.presses.empty()) return; // a checkpoint restart keeps the alignment
+    double startTime = pl->m_gameState.m_levelTime;
+    bool fromStartPos = pl->m_startPosObject != nullptr && startTime > 0.5;
+
+    double want = 0.0;
+    if (fromStartPos) {
+        if (m_alignMode == "Start Pos") want = startTime;
+        else if (m_alignMode == "Auto") {
+            // the macro's own (unshifted) extent
+            double first = m_macro.presses.front().start - m_alignOffset;
+            double last = 0.0;
+            for (auto const& p : m_macro.presses) last = std::max(last, p.end - m_alignOffset);
+            double levelDur = pl->m_level && pl->m_level->m_timestamp > 0 ? pl->m_level->m_timestamp / 240.0 : 0.0;
+            // Looks like it was counted from the start pos: begins right away, and shifted it still
+            // fits inside the level. A macro that reaches the end of the level is a full run.
+            bool coversEnd = levelDur > 0.0 && last >= levelDur - 3.0;
+            bool fitsShifted = levelDur <= 0.0 || last + startTime <= levelDur + 3.0;
+            if (first < 3.0 && !coversEnd && fitsShifted) want = startTime;
+        }
+    }
+
+    if (std::abs(want - m_alignOffset) < 1e-9) return;
+    double delta = want - m_alignOffset;
+    this->shiftMacro(delta);
+    m_alignOffset = want;
+    if (want > 0.0) {
+        Notification::create(fmt::format("Macro aligned to start pos (+{:.2f}s). Wrong? Tools > Macro From Start Pos", want), NotificationIcon::Info, 2.f)->show();
+    }
+    else {
+        Notification::create("Macro back to level-start timing", NotificationIcon::Info, 1.f)->show();
+    }
 }
 
 void ClickOverlay::shiftMacro(double seconds) {

@@ -361,7 +361,7 @@ void ClickMenu::buildPage() {
         L.toggle("Stats On Death", "stats-on-death", "Shows a short accuracy summary every time you die.");
         L.toggle("Stats On Finish", "stats-on-complete", "Shows the full stats popup when you complete the level.");
         L.toggle("Merge Recordings", "record-merge", "When a recording is saved over an existing macro with the same name, only the part you recorded is replaced. Record your best sections one at a time.");
-        L.gap(4.f);
+        L.choice("Macro From Start Pos", "macro-start", "Start Pos", "Level Start", "Eclipse saves a macro recorded from a start pos with time counted from that start pos, so its clicks show up at the start of the level. ON: the macro's time 0 is the start pos you play from. OFF: time 0 is the level start. The default (Auto, in Settings) guesses: a macro that begins right away and is shorter than the rest of the level is treated as a start-pos recording.");
         // recording toggle (not a setting)
         {
             auto rec = CCMenuItemExt::createTogglerWithStandardSprites(0.7f, [this](CCMenuItemToggler* t) {
@@ -412,7 +412,7 @@ void ClickMenu::buildPage() {
         });
 
         // macro editing row along the bottom of the content area
-        float ey = 86.f;
+        float ey = 76.f;
         auto title = CCLabelBMFont::create("Edit Macro:", "bigFont.fnt");
         title->setScale(0.38f);
         title->setAnchorPoint({0.f, 0.5f});

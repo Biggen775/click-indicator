@@ -354,7 +354,15 @@ class $modify(CIPlayLayer, PlayLayer) {
             Diag::get().line("RESET", fmt::format("{} checkpoints={}", gameStateText(this), m_checkpointArray ? m_checkpointArray->count() : 0));
         }
 
-        if (auto overlay = fields->overlay) overlay->onReset();
+        if (auto overlay = fields->overlay) {
+            overlay->onReset();
+            bool fresh = !m_checkpointArray || m_checkpointArray->count() == 0;
+            double before = overlay->alignOffset();
+            overlay->alignForAttempt(this, fresh);
+            if (Diag::get().enabled() && overlay->alignOffset() != before) {
+                Diag::get().line("ALIGN", fmt::format("offset={:.5f} (was {:.5f}) startpos={} lt={:.5f}", overlay->alignOffset(), before, m_startPosObject ? 1 : 0, m_gameState.m_levelTime));
+            }
+        }
         this->updateSafeMode();
         this->updateSpeed();
 

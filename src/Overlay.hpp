@@ -89,6 +89,11 @@ public:
     void finishAttempt(bool completed);
     std::vector<double> const& history() const { return m_history; }
 
+    // Macro alignment. Eclipse (and some other bots) count a macro recorded from a start pos
+    // from that start pos, not from the level start. Called at every fresh start of an attempt.
+    void alignForAttempt(PlayLayer* pl, bool freshStart);
+    double alignOffset() const { return m_alignOffset; }
+
     // Macro editing helpers
     void shiftMacro(double seconds);
     void trimMacroBefore(double seconds);
@@ -140,6 +145,8 @@ private:
     size_t m_cueCursor = 0;
     bool m_onlyPractice = false;
     bool m_enabled = true;
+    std::string m_alignMode = "Auto"; // Auto / Level Start / Start Pos
+    double m_alignOffset = 0.0;       // seconds currently added to the macro's own times
 
     AssistEngine m_assist[2];
     std::function<void(bool, bool)> m_fire; // sends a game input (set by assistTick)
