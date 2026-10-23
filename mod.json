@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.3.2",
+	"version": "v2.3.3",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -279,9 +279,21 @@
 		},
 		"spam-assist": {
 			"type": "bool",
-			"name": "Spam Assist (wave / ship)",
-			"description": "Extra taps while the macro is holding are absorbed. While you hold, the game follows the macro's press/release pattern (up to Max Hold). Taps that match nothing in the macro are swallowed.",
+			"name": "Absorb Spam In Holds",
+			"description": "Extra taps while the macro is holding a long hold (120 ms+) are absorbed, so the game keeps holding.",
 			"default": true
+		},
+		"spam-follow": {
+			"type": "bool",
+			"name": "Follow Pattern While Held",
+			"description": "While you keep holding, the game follows the macro's press/release pattern for up to Max Hold. Strong: holding through a spam section plays the spam.",
+			"default": false
+		},
+		"spam-swallow": {
+			"type": "bool",
+			"name": "Swallow Stray Taps",
+			"description": "Taps that match nothing in the macro (nothing within 150 ms) are not sent to the game.",
+			"default": false
 		},
 		"spam-follow-max": {
 			"type": "float",

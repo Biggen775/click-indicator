@@ -1,3 +1,8 @@
+# v2.3.3
+
+- Aim Assist is conservative in dense wave/ship spam: a tap is only matched to a macro click that is clearly closer to it than to the neighbouring clicks, and extra taps are absorbed only inside real holds (120 ms+).
+- Pattern-follow while held and stray-tap swallowing are now separate opt-in toggles, off by default.
+
 # v2.3.2
 
 - Menu laid out on a fixed grid so nothing overlaps. Now five pages: Display, Lane & Sound, Aim Assist, Practice, Tools. Offset Trail, Countdown, Lane Look-Ahead and Hold Slack are in the menu too.
