@@ -1,3 +1,7 @@
+# v2.3.2
+
+- Menu laid out on a fixed grid so nothing overlaps. Now five pages: Display, Lane & Sound, Aim Assist, Practice, Tools. Offset Trail, Countdown, Lane Look-Ahead and Hold Slack are in the menu too.
+
 # v2.3.1
 
 - Recording and playback now share one clock snapshot per game tick, so a recorded click replays on exactly the tick it was made.
