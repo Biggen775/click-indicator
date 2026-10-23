@@ -1,3 +1,7 @@
+# v2.3.4
+
+- Diagnostic Log (Tools page): records clicks, assisted clicks, positions, clocks and deaths to diag.log so timing problems can be analysed from a file.
+
 # v2.3.3
 
 - Aim Assist is conservative in dense wave/ship spam: a tap is only matched to a macro click that is clearly closer to it than to the neighbouring clicks, and extra taps are absorbed only inside real holds (120 ms+).

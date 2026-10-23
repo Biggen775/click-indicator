@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.3.3",
+	"version": "v2.3.4",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -642,6 +642,16 @@
 			"name": "Merge Recordings",
 			"description": "Saving over an existing macro with the same name only replaces the part you recorded.",
 			"default": true
+		},
+		"diag-title": {
+			"type": "title",
+			"name": "Diagnostics"
+		},
+		"diag-log": {
+			"type": "bool",
+			"name": "Diagnostic Log",
+			"description": "Writes <cy>diag.log</c> in the mod's save folder: every click, every assisted click, positions, clocks and deaths. Turn on, reproduce the problem, then send the file.",
+			"default": false
 		}
 	},
 	"resources": {
