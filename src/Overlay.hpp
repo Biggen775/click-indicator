@@ -58,6 +58,10 @@ public:
     static float levelPercent(PlayLayer* pl);
     // Practice mode or playing from a start pos
     static bool practicing(PlayLayer* pl);
+    // Physics step length seen this tick (to compare the game's TPS with the macro's)
+    void notePhysicsStep(float dt);
+    // "" or a one-line warning when the game runs at a different TPS than the macro was made at
+    std::string tpsWarning() const;
     void assistTick(PlayLayer* pl, std::function<void(bool down, bool p2)> const& fire);
     void setFire(std::function<void(bool down, bool p2)> fire) { m_fire = std::move(fire); }
     static double assistWindowFor(int strength);
@@ -118,6 +122,8 @@ private:
     cocos2d::CCLabelBMFont* m_judgeLabel = nullptr;
     cocos2d::CCLabelBMFont* m_offsetLabel = nullptr;
     cocos2d::CCLabelBMFont* m_assistLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_warnLabel = nullptr;
+    double m_stepRate = 0.0; // smoothed physics steps per second
 
     bool m_prepared = false;
     bool m_usePositions = false;

@@ -18,7 +18,7 @@ Result<> Recorder::save(std::filesystem::path const& path, std::string const& le
     root.set("duration", matjson::Value(m_inputs.back().t));
     auto bot = matjson::Value::object();
     bot.set("name", matjson::Value("ClickIndicator"));
-    bot.set("version", matjson::Value(static_cast<std::intmax_t>(1)));
+    bot.set("version", matjson::Value(static_cast<std::intmax_t>(2))); // v2: frame = int(t*fps)+1 like xdBot, plus exact "t"
     root.set("bot", bot);
     auto level = matjson::Value::object();
     level.set("id", matjson::Value(static_cast<std::intmax_t>(levelID)));

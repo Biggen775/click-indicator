@@ -26,6 +26,9 @@ struct RawInput {
 struct RawMacro {
     double framerate = 240.0;
     bool platformer = false;
+    // Click Indicator v1 files (before v2.3.5) rounded frame = round(levelTime * fps), i.e. frame F
+    // is the tick at F / fps, not (F - 1) / fps like the bots. They carry no exact times.
+    bool legacyRounding = false;
     uint32_t levelID = 0;
     std::string levelName;
     std::vector<RawInput> inputs;
@@ -184,6 +187,12 @@ Result<RawMacro> fromJson(matjson::Value const& root) {
 
     m.platformer = boolOr(findKey(root, {"platformer"}), false);
 
+    if (auto bot = findKey(root, {"bot"})) {
+        auto name = findKey(*bot, {"name"});
+        auto ver = numberOr(findKey(*bot, {"version"}), 0);
+        if (name && name->isString() && name->asString().unwrapOr("") == "ClickIndicator" && ver < 2) m.legacyRounding = true;
+    }
+
     if (auto level = findKey(root, {"level"})) {
         m.levelID = static_cast<uint32_t>(numberOr(findKey(*level, {"id"}), 0));
         if (auto name = findKey(*level, {"name"}); name && name->isString()) {
@@ -243,6 +252,7 @@ void buildPresses(RawMacro& raw, Macro& out) {
         // Our own recordings also carry the exact clock reading, which replays sub-tick exact
         // when physics bypass runs the level at more than 240 steps a second.
         double t = in.time >= 0.0 ? in.time
+            : raw.legacyRounding ? static_cast<double>(in.frame) / raw.framerate
             : static_cast<double>(in.frame > 0 ? in.frame - 1 : 0) / raw.framerate;
 
         if (in.down) {

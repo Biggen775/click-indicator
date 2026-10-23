@@ -14,14 +14,19 @@
 // from the macro, so holds, taps and spam all follow the same few rules.
 //
 // Rules (W = press window from the strength, R = release window):
-//  * Press within W before a macro press: the game presses exactly at the macro time.
-//  * Press on time or late (or late into a hold that's still going): goes through now.
+//  * A press within W of a macro press is matched to the NEAREST macro press that has
+//    not been played yet. Early: the game presses exactly at the macro time. On time or
+//    late: goes through now.
 //  * Release early: the game keeps holding until the macro's release if that is within R,
 //    or always when followHold is set (release strength 5+).
-//  * Spam assist (wave / ship): while you keep holding, the game follows the macro's
-//    press/release pattern through gaps up to followGap, for up to followMax seconds.
-//    Extra taps while the macro is holding are absorbed. Taps that match nothing are
-//    swallowed. Holding past a lone macro release gets holdSlack of grace, then releases.
+//  * Release late (still holding at the macro's release) with followHold: the game lets go
+//    at the macro's release (+ holdSlack); the rest of that physical hold is ignored.
+//    Without followHold the hold is the player's own from there.
+//  * Re-press while the game is still holding a matched press: the hold is kept to its
+//    macro release, then the new press is played at its own macro time (no early release).
+//  * Spam assist (wave / ship): extra taps while the macro is holding are absorbed; with
+//    `follow`, holding through gaps up to followGap re-presses along the macro's pattern.
+//    Taps that match nothing are passed through (or swallowed with swallowStray).
 class AssistEngine {
 public:
     struct Params {
@@ -34,12 +39,11 @@ public:
         double followMax = 2.0;
         double followGap = 0.4;
         double releaseOffset = 0.0;
-        double holdSlack = 0.04;
+        double holdSlack = 0.0;
     };
 
     // floating point noise only: macro times are exact tick times, a release is due on the tick
-    // whose clock reads the macro's release time (was half a millisecond, which with physics
-    // bypass on fired releases a sub-step early)
+    // whose clock reads the macro's release time
     static constexpr double kEps = 1e-6;
     static constexpr double kStrayWindow = 0.15;
 
@@ -47,6 +51,7 @@ public:
         m_physDown = false;
         m_gameDown = false;
         m_anchor = -1;
+        m_next = -1;
         m_lastFired = -1;
         m_swallow = false;
         m_following = false;
@@ -70,21 +75,42 @@ public:
         m_swallow = false;
         m_following = false;
         m_plain = false;
-
-        // already attached to a macro press the game is holding (re-press during a hold)
-        if (prm.spam && m_anchor >= 0 && m_gameDown && this->endOf(presses, m_anchor, prm) > now + kEps &&
-            presses[m_anchor].end - presses[m_anchor].start > 0.12) {
-            m_absorbed = true;
-            m_lastAction = "absorbed";
-            return true; // absorbed, the game keeps holding
-        }
         m_absorbed = false;
 
-        int match = this->findMatch(presses, p2, now, prm.pressWindow);
+        // the game is still holding a matched macro press: keep that hold to its release,
+        // and line this new press up with the next macro press if it is close to one
+        if (m_anchor >= 0 && m_gameDown && this->endOf(presses, m_anchor, prm) > now + kEps) {
+            int match = this->findMatch(presses, p2, now, prm.pressWindow, -1);
+            if (match == m_anchor) {
+                m_absorbed = true;
+                m_lastAction = "absorbed";
+                return true; // a re-press for the press we are already holding
+            }
+            if (match > m_anchor) {
+                m_next = match;
+                m_lastAction = "queued-next";
+                return true;
+            }
+            if (prm.spam && presses[m_anchor].end - presses[m_anchor].start > 0.12) {
+                m_absorbed = true;
+                m_lastAction = "absorbed";
+                return true; // absorbed, the game keeps holding
+            }
+            // a re-press for nothing in particular while holding: let go and press again now
+            // (the player's own click), the hold's release window still applies
+            m_plain = true;
+            m_lastAction = "re-press";
+            this->set(false, fire);
+            this->set(true, fire);
+            return true;
+        }
+        m_next = -1;
+
+        int match = this->findMatch(presses, p2, now, prm.pressWindow, -1);
         if (match < 0) match = this->findHoldCovering(presses, p2, now);
         if (match < 0) {
             // near a macro press but outside the strength window: a plain click for that press
-            int nearIdx = this->findMatch(presses, p2, now, std::max(prm.pressWindow, kStrayWindow));
+            int nearIdx = this->findMatch(presses, p2, now, std::max(prm.pressWindow, kStrayWindow), -1);
             if (nearIdx >= 0) {
                 // the player's own click, sent now; the anchor only serves the release window
                 m_anchor = nearIdx;
@@ -133,11 +159,22 @@ public:
             this->set(m_physDown && !m_swallow, fire);
             return;
         }
-        if (m_anchor >= static_cast<int>(presses.size())) { m_anchor = -1; this->set(m_physDown, fire); return; }
+        if (m_anchor >= static_cast<int>(presses.size())) { m_anchor = -1; m_next = -1; this->set(m_physDown, fire); return; }
 
         Press const& p = presses[m_anchor];
         double start = p.start;
         double end = this->endOf(presses, m_anchor, prm);
+
+        // a later press was queued while this hold was going: release at this hold's end
+        // and carry on with the queued press (as an early tap for it)
+        if (m_next >= 0 && m_gameDown && now >= end - kEps) {
+            this->set(false, fire);
+            m_anchor = m_next;
+            m_next = -1;
+            m_absorbed = false;
+            this->evaluate(presses, p2, now, prm, fire);
+            return;
+        }
 
         if (m_physDown) {
             if (now < start && !m_plain) { this->set(false, fire); return; }     // early: wait
@@ -161,7 +198,15 @@ public:
                 m_swallow = true; // the rest of this physical hold is ignored
                 return;
             }
-            // no pattern-follow: the hold is the player's own from here
+            if (prm.followHold && !m_plain) {
+                // release strength 5+: the macro's release is the release, even if you are still holding
+                if (now < end + prm.holdSlack) { this->set(true, fire); return; }
+                this->set(false, fire);
+                m_anchor = -1;
+                m_swallow = true; // the rest of this physical hold is ignored
+                return;
+            }
+            // no follow-hold: the hold is the player's own from here
             this->set(true, fire);
             m_anchor = -1;
             return;
@@ -186,6 +231,7 @@ public:
         bool keep = now < end - kEps && ((prm.followHold && !m_plain) || end - now <= prm.releaseWindow);
         if (keep) return;
         this->set(false, fire);
+        if (m_next >= 0) { m_anchor = m_next; m_next = -1; return; } // queued press: wait for its time
         m_anchor = -1;
         m_following = false;
     }
@@ -194,6 +240,7 @@ public:
     void flush(F&& fire) {
         this->set(m_physDown && !m_swallow, fire);
         m_anchor = -1;
+        m_next = -1;
         m_following = false;
     }
 
@@ -206,6 +253,7 @@ private:
     bool m_plain = false;
     double m_physDownAt = 0.0;
     int m_anchor = -1;
+    int m_next = -1;      // press queued behind the current hold (re-press while holding)
     int m_lastFired = -1; // last macro press whose press was actually sent
     char const* m_lastAction = "reset";
 
@@ -229,7 +277,10 @@ private:
         return -1;
     }
 
-    int findMatch(std::vector<Press> const& presses, bool p2, double now, double window) const {
+    // The nearest macro press (for this player) within `window` of now that has not been
+    // played yet. Presses up to `after` (and anything already fired) are not candidates,
+    // except the current anchor.
+    int findMatch(std::vector<Press> const& presses, bool p2, double now, double window, int after) const {
         int best = -1;
         double bestDist = 0.0;
         auto it = std::lower_bound(presses.begin(), presses.end(), now - window, [](Press const& p, double t) {
@@ -237,21 +288,10 @@ private:
         });
         for (; it != presses.end() && it->start <= now + window; ++it) {
             int idx = static_cast<int>(it - presses.begin());
-            if (it->p2 != p2 || (idx <= m_lastFired && idx != m_anchor)) continue;
+            if (it->p2 != p2) continue;
+            if (idx <= after) continue;
+            if (idx <= m_lastFired && idx != m_anchor) continue;
             double dist = std::abs(it->start - now);
-            // in dense sections only claim a tap that is clearly closer to this press than to its neighbours
-            double limit = window;
-            for (int j = idx - 1; j >= 0; j--) {
-                if (presses[j].p2 != p2) continue;
-                limit = std::min(limit, (it->start - presses[j].start) * 0.4);
-                break;
-            }
-            for (int j = idx + 1; j < static_cast<int>(presses.size()); j++) {
-                if (presses[j].p2 != p2) continue;
-                limit = std::min(limit, (presses[j].start - it->start) * 0.4);
-                break;
-            }
-            if (dist > std::max(limit, 0.006)) continue;
             if (best < 0 || dist < bestDist) {
                 best = idx;
                 bestDist = dist;

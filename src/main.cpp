@@ -656,7 +656,7 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         if (diag) {
             auto ov = static_cast<CIPlayLayer*>(pl)->m_fields->overlay.data();
             double clock = ov ? ov->currentTime(pl) : TickClock::now(m_gameState.m_levelTime);
-            Diag::get().line(s_assistFiring ? "FIRED" : "INPUT", fmt::format("{} {} {} clock={:.5f} nearest[{}]",
+            Diag::get().line(s_assistFiring ? "INNER" : "INPUT", fmt::format("{} {} {} clock={:.5f} nearest[{}]",
                 down ? "DOWN" : "UP", isPlayer1 ? "p1" : "p2", gameStateText(pl), clock, ov ? ov->nearestInfo(clock, !isPlayer1) : std::string("none")));
         }
 
@@ -670,11 +670,7 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         if (overlay->autoplayActive(pl)) return; // the bot is playing: ignore the real input
         overlay->onPlayerInput(pl, down, p2);
 
-        overlay->setFire([this](bool d, bool pp2) {
-            s_assistFiring = true;
-            this->handleButton(d, 1, !pp2);
-            s_assistFiring = false;
-        });
+        overlay->setFire([this](bool d, bool pp2) { this->sendAssistInput(d, pp2); });
         bool handled = down ? overlay->assistOnPress(pl, p2) : overlay->assistOnRelease(pl, p2);
         if (diag) Diag::get().line("ASSIST", fmt::format("{} {}", handled ? "handled" : "passed", overlay->lastAssistNote()));
         if (!handled) {
@@ -682,14 +678,26 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         }
     }
 
+    // An input from the assist / auto-play goes straight to the game's own handleButton,
+    // like the macro bots do: it is not a real input, so other mods' input hooks (and ours)
+    // must not see it, and it is never recorded.
+    void sendAssistInput(bool down, bool p2) {
+        auto pl = PlayLayer::get();
+        if (pl && static_cast<GJBaseGameLayer*>(pl) == this && Diag::get().enabled()) {
+            auto ov = static_cast<CIPlayLayer*>(pl)->m_fields->overlay.data();
+            double clock = ov ? ov->currentTime(pl) : TickClock::now(m_gameState.m_levelTime);
+            Diag::get().line("FIRED", fmt::format("{} {} {} clock={:.5f} nearest[{}]",
+                down ? "DOWN" : "UP", p2 ? "p2" : "p1", gameStateText(pl), clock, ov ? ov->nearestInfo(clock, p2) : std::string("none")));
+        }
+        s_assistFiring = true;
+        GJBaseGameLayer::handleButton(down, 1, !p2);
+        s_assistFiring = false;
+    }
+
     void fireAssist() {
         if (s_assistFiring) return;
         if (auto overlay = this->overlayIfPlayLayer()) {
-            auto fire = [this](bool down, bool p2) {
-                s_assistFiring = true;
-                this->handleButton(down, 1, !p2);
-                s_assistFiring = false;
-            };
+            auto fire = [this](bool down, bool p2) { this->sendAssistInput(down, p2); };
             overlay->autoplayTick(PlayLayer::get(), fire);
             overlay->assistTick(PlayLayer::get(), fire);
         }
@@ -700,6 +708,7 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
     // replays on exactly the tick it was made.
     void processQueuedButtons(float dt, bool clearInputQueue) {
         if (PlayLayer::get() == static_cast<GJBaseGameLayer*>(this)) {
+            if (auto overlay = this->overlayIfPlayLayer()) overlay->notePhysicsStep(dt);
             TickClock::begin(m_gameState.m_levelTime);
             this->fireAssist();
             GJBaseGameLayer::processQueuedButtons(dt, clearInputQueue);

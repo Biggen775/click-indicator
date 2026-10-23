@@ -101,6 +101,12 @@ bool ClickOverlay::init(Macro macro, int levelID) {
     m_assistLabel->setOpacity(0);
     this->addChild(m_assistLabel, 2);
 
+    m_warnLabel = CCLabelBMFont::create("", "chatFont.fnt");
+    m_warnLabel->setScale(0.5f);
+    m_warnLabel->setColor({255, 150, 80});
+    m_warnLabel->setOpacity(0);
+    this->addChild(m_warnLabel, 2);
+
     m_countdownLabel = CCLabelBMFont::create("", "bigFont.fnt");
     m_countdownLabel->setScale(0.3f);
     m_countdownLabel->setOpacity(0);
@@ -406,6 +412,21 @@ float ClickOverlay::levelPercent(PlayLayer* pl) {
 
 bool ClickOverlay::practicing(PlayLayer* pl) {
     return pl && (pl->m_isPracticeMode || pl->m_startPosObject != nullptr);
+}
+
+void ClickOverlay::notePhysicsStep(float dt) {
+    if (dt <= 1e-5f || dt > 0.1f) return;
+    double rate = 1.0 / dt;
+    m_stepRate = m_stepRate <= 0.0 ? rate : m_stepRate * 0.9 + rate * 0.1;
+}
+
+std::string ClickOverlay::tpsWarning() const {
+    if (m_stepRate <= 0.0 || m_macro.framerate <= 0.0) return "";
+    double ratio = m_stepRate / m_macro.framerate;
+    if (ratio > 0.95 && ratio < 1.05) return "";
+    // a 1440 TPS macro replayed at 240 TPS can only land inputs on 240 Hz ticks: up to 4 ms off
+    return fmt::format("Macro is {:.0f} TPS, game runs {:.0f} TPS: inputs can be up to {:.1f} ms off. Set your TPS to {:.0f}.",
+        m_macro.framerate, std::round(m_stepRate), 1000.0 / std::min(m_stepRate, m_macro.framerate), m_macro.framerate);
 }
 
 std::string ClickOverlay::assistInactiveReason(PlayLayer* pl) const {
@@ -901,6 +922,11 @@ void ClickOverlay::refresh(PlayLayer* pl, float dt) {
         }
         m_assistLabel->setOpacity(static_cast<GLubyte>(alpha * 255));
         if (!m_set.showLane) m_assistLabel->setPosition({win.width / 2.f, win.height - 40.f});
+
+        std::string warn = this->tpsWarning();
+        if (warn != m_warnLabel->getString()) m_warnLabel->setString(warn.c_str());
+        m_warnLabel->setOpacity(warn.empty() ? 0 : 230);
+        m_warnLabel->setPosition({win.width / 2.f, 14.f});
     }
     for (auto& f : m_receptorFlash) f = std::max(0.f, f - dt);
 }
