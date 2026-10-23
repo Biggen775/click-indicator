@@ -11,10 +11,10 @@ using namespace geode::prelude;
 namespace {
     ClickMenu* s_openMenu = nullptr;
 
-    constexpr float kWidth = 420.f;
-    constexpr float kHeight = 318.f;
-    constexpr int kPages = 4;
-    constexpr char const* kPageNames[kPages] = {"Display", "Aim Assist", "Practice", "Tools"};
+    constexpr float kWidth = 440.f;
+    constexpr float kHeight = 300.f;
+    constexpr int kPages = 5;
+    constexpr char const* kPageNames[kPages] = {"Display", "Lane & Sound", "Aim Assist", "Practice", "Tools"};
 
     void settingChanged() {
         refreshOverlaySettings();
@@ -205,7 +205,7 @@ bool ClickMenu::init() {
             Mod::get()->setSavedValue<int64_t>("menu-page", m_page);
             this->buildPage();
         });
-        btn->setPosition({kWidth / 2.f + (right ? 90.f : -90.f), kHeight - 44.f});
+        btn->setPosition({kWidth / 2.f + (right ? 100.f : -100.f), kHeight - 44.f});
         m_menu->addChild(btn);
     };
     makeArrow(false);
@@ -213,7 +213,7 @@ bool ClickMenu::init() {
 
     // status line + bottom buttons (shared by all pages)
     m_status = CCLabelBMFont::create("", "chatFont.fnt");
-    m_status->setPosition({kWidth / 2.f, 54.f});
+    m_status->setPosition({kWidth / 2.f, 52.f});
     m_mainLayer->addChild(m_status, 10);
 
     auto reloadSpr = ButtonSprite::create("Reload", "goldFont.fnt", "GJ_button_01.png", 0.65f);
@@ -223,12 +223,12 @@ bool ClickMenu::init() {
         if (!PlayLayer::get()) Notification::create("Open a level to load its macro", NotificationIcon::Info)->show();
         else if (!ok) Notification::create("No macro found for this level", NotificationIcon::Warning)->show();
     });
-    reloadBtn->setPosition({kWidth / 2.f - 150.f, 24.f});
+    reloadBtn->setPosition({kWidth / 2.f - 160.f, 24.f});
     m_menu->addChild(reloadBtn);
 
     auto pickSpr = ButtonSprite::create("Pick Macro", "goldFont.fnt", "GJ_button_01.png", 0.65f);
     auto pickBtn = CCMenuItemExt::createSpriteExtra(pickSpr, [this](auto) { this->openMacroPicker(); });
-    pickBtn->setPosition({kWidth / 2.f - 50.f, 24.f});
+    pickBtn->setPosition({kWidth / 2.f - 55.f, 24.f});
     m_menu->addChild(pickBtn);
 
     auto folderSpr = ButtonSprite::create("Folder", "goldFont.fnt", "GJ_button_01.png", 0.65f);
@@ -243,7 +243,7 @@ bool ClickMenu::init() {
 
     auto moreSpr = ButtonSprite::create("Settings", "goldFont.fnt", "GJ_button_04.png", 0.65f);
     auto moreBtn = CCMenuItemExt::createSpriteExtra(moreSpr, [](auto) { geode::openSettingsPopup(Mod::get()); });
-    moreBtn->setPosition({kWidth / 2.f + 150.f, 24.f});
+    moreBtn->setPosition({kWidth / 2.f + 160.f, 24.f});
     m_menu->addChild(moreBtn);
 
     this->buildPage();
@@ -268,135 +268,162 @@ void ClickMenu::buildPage() {
     m_releaseLabel = nullptr;
     m_recordToggle = nullptr;
 
-    float leftX = 34.f;
-    float rightX = kWidth / 2.f + 22.f;
-    float top = kHeight - 74.f;
-    float step = 28.f;
+    // Grid: two columns, items stacked from the top with fixed heights so nothing overlaps.
+    constexpr float kTop = kHeight - 72.f;   // first row centre
+    constexpr float kToggleH = 25.f;
+    constexpr float kNumberH = 36.f;
+    constexpr float kLeftX = 30.f;
+    constexpr float kRightX = kWidth / 2.f + 18.f;
+    constexpr float kNumOffset = 72.f;       // number rows are centred this far right of the column edge
 
-    if (m_page == 0) {
-        this->addToggle(m_pageNode, menu, "Enabled", "enabled", {leftX, top}, "Turns the whole click indicator on or off. Also toggled by the Overlay hotkey (F7 by default).");
-        this->addToggle(m_pageNode, menu, "Click Bars", "show-bars", {leftX, top - step}, "Green bars in the level where each click happens. Thin line = tap, wide bar = hold.");
-        this->addToggle(m_pageNode, menu, "Hit Line", "show-hit-line", {leftX, top - step * 2}, nullptr);
-        this->addToggle(m_pageNode, menu, "Click Markers", "show-markers", {leftX, top - step * 3}, nullptr);
-        this->addToggle(m_pageNode, menu, "Hide Passed", "hide-passed", {leftX, top - step * 4}, "Only shows clicks that are still ahead of you.");
-        this->addToggle(m_pageNode, menu, "Trouble Spots", "trouble-spots", {leftX, top - step * 5}, "Clicks you keep getting wrong (late, early or missed) across attempts turn red so you know what to practice. Hitting them well again clears the red.");
+    struct Column {
+        ClickMenu* m; CCNode* node; CCMenu* menu; float x; float y;
+        void toggle(char const* text, char const* key, char const* info) {
+            m->addToggle(node, menu, text, key, {x, y}, info); y -= kToggleH;
+        }
+        void choice(char const* text, char const* key, char const* on, char const* off, char const* info) {
+            m->addChoiceToggle(node, menu, text, key, on, off, {x, y}, info); y -= kToggleH;
+        }
+        void number(char const* text, char const* key, int64_t lo, int64_t hi, int64_t step, char const* suffix, CCLabelBMFont** out = nullptr) {
+            m->addNumberRow(node, menu, text, key, lo, hi, step, {x + kNumOffset, y - 6.f}, out, suffix); y -= kNumberH;
+        }
+        void label(char const* text, float scale = 0.4f) {
+            m->addLabel(node, text, {x + kNumOffset, y}, scale); y -= 16.f;
+        }
+        void gap(float h) { y -= h; }
+        void button(char const* text, geode::Function<void(CCMenuItemSpriteExtra*)> cb, float scale = 0.55f) {
+            auto spr = ButtonSprite::create(text, "goldFont.fnt", "GJ_button_01.png", scale);
+            auto btn = CCMenuItemExt::createSpriteExtra(spr, std::move(cb));
+            btn->setPosition({x + kNumOffset, y});
+            menu->addChild(btn);
+            y -= 28.f;
+        }
+    };
+    Column L{this, m_pageNode, menu, kLeftX, kTop};
+    Column R{this, m_pageNode, menu, kRightX, kTop};
 
-        this->addToggle(m_pageNode, menu, "Rhythm Lane", "show-lane", {rightX, top}, "The osu!mania-style lane with falling notes.");
-        this->addChoiceToggle(m_pageNode, menu, "Horizontal Lane", "lane-style", "Horizontal", "Vertical", {rightX, top - step}, "Guitar Hero style: notes come in from the right along the bottom of the screen instead of a vertical tower.");
-        this->addChoiceToggle(m_pageNode, menu, "Lane On Right", "lane-side", "Right", "Left", {rightX, top - step * 2}, nullptr);
-        this->addToggle(m_pageNode, menu, "Judgments", "show-judgments", {rightX, top - step * 3}, "Shows PERFECT / GREAT / GOOD / MISS and how many ms early or late you clicked.");
-        this->addToggle(m_pageNode, menu, "Click Sounds", "tick-sound", {rightX, top - step * 4}, "Plays a tick at every macro click so you can learn the rhythm by ear. Settings has a volume slider and a separate tick for releases.");
-        this->addToggle(m_pageNode, menu, "Practice Only", "only-practice", {rightX, top - step * 5}, "Only show the indicator in practice mode.");
+    if (m_page == 0) { // Display
+        L.toggle("Enabled", "enabled", "Turns the whole click indicator on or off. Also toggled by the Overlay hotkey (F7 by default).");
+        L.toggle("Click Bars", "show-bars", "Green bars in the level where each click happens. Thin line = tap, wide bar = hold.");
+        L.toggle("Hit Line", "show-hit-line", nullptr);
+        L.toggle("Click Markers", "show-markers", nullptr);
+        L.toggle("Hide Passed", "hide-passed", "Only shows clicks that are still ahead of you.");
+        L.toggle("Trouble Spots", "trouble-spots", "Clicks you keep getting wrong (late, early or missed) across attempts turn red so you know what to practice. Hitting them well again clears the red.");
+
+        R.toggle("Judgments", "show-judgments", "Shows PERFECT / GREAT / GOOD / MISS and how many ms early or late you clicked.");
+        R.toggle("Offset Trail", "offset-trail", "A dot on each lane note shows how early or late you were: yellow = this attempt, white = last attempt.");
+        R.toggle("Timeline", "timeline", "A thin bar across the top with every click as a tick mark (red = trouble spot), your position, and the section markers.");
+        R.toggle("Practice Only", "only-practice", "Only show the indicator in practice mode.");
+        R.number("Hide Overlay At %", "hide-after-percent", 0, 100, 5, "%");
     }
-    else if (m_page == 1) {
-        this->addToggle(m_pageNode, menu, "Aim Assist", "assist-enabled", {leftX, top}, "If you click EARLY, your click is held back and sent at the exact moment the macro clicked. Late clicks go through normally. At release strength 5 and up, letting go early does NOT end the hold. Also toggled by the Assist hotkey (F9 by default).");
-        this->addToggle(m_pageNode, menu, "Assist Flash", "assist-flash", {leftX, top - step}, "Flashes the lane receptor yellow and shows ASSIST whenever a click was corrected.");
-        this->addToggle(m_pageNode, menu, "Safe Mode", "assist-safe-mode", {leftX, top - step * 2}, "While the assist is on, the level runs like a start-pos test so no percentage or completion is saved.");
-        this->addToggle(m_pageNode, menu, "Per-Level Settings", "per-level", {leftX, top - step * 3}, "Remembers the settings on these pages separately for every level.");
-        this->addToggle(m_pageNode, menu, "Spam Assist", "spam-assist", {leftX, top - step * 4}, "For wave and ship. Extra taps while the macro is holding are absorbed (the game keeps holding). While you hold, the game follows the macro's press/release pattern for up to the Max Hold time, so holding through a spam section plays the spam. Taps that match nothing are swallowed.");
-        this->addNumberRow(m_pageNode, menu, "Spam Max Hold (s)", "spam-follow-max-ds", 5, 50, 5, {leftX + 70.f, top - step * 5.6f}, nullptr, "");
+    else if (m_page == 1) { // Lane & Sound
+        L.toggle("Rhythm Lane", "show-lane", "The osu!mania-style lane with falling notes.");
+        L.choice("Horizontal Lane", "lane-style", "Horizontal", "Vertical", "Guitar Hero style: notes come in from the right along the bottom of the screen instead of a vertical tower.");
+        L.choice("Lane On Right", "lane-side", "Right", "Left", nullptr);
+        L.toggle("Next-Click Countdown", "countdown", "Seconds until the next click, shown near the lane when the gap is 1 second or more.");
+        L.toggle("Click Sounds", "tick-sound", "Plays a tick at every macro click so you can learn the rhythm by ear. Settings has a volume slider and a separate tick for releases.");
+        L.toggle("Count-In Beats", "count-in", "Three soft ticks half a second apart before the first click after a restart or checkpoint.");
 
-        this->addNumberRow(m_pageNode, menu, "Press Strength", "assist-strength", 1, 10, 1, {rightX + 60.f, top}, &m_strengthLabel, "");
-        this->addNumberRow(m_pageNode, menu, "Release Strength", "assist-release-strength", 0, 10, 1, {rightX + 60.f, top - step * 1.3f}, &m_releaseLabel, "");
-        this->addNumberRow(m_pageNode, menu, "Assist Off At %", "assist-off-percent", 0, 100, 5, {rightX + 60.f, top - step * 2.6f}, nullptr, "%");
-        this->addNumberRow(m_pageNode, menu, "Hide Overlay At %", "hide-after-percent", 0, 100, 5, {rightX + 60.f, top - step * 3.9f}, nullptr, "%");
-        this->addNumberRow(m_pageNode, menu, "Release Offset (ms)", "release-offset-ms", -50, 80, 2, {rightX + 60.f, top - step * 5.2f}, nullptr, "ms");
-        this->addLabel(m_pageNode, "Releases too early? raise Release Offset.", {rightX + 60.f, top - step * 6.3f}, 0.38f);
-        auto resetSpr = ButtonSprite::create("Reset Level Prefs", "goldFont.fnt", "GJ_button_06.png", 0.5f);
-        auto resetBtn = CCMenuItemExt::createSpriteExtra(resetSpr, [](auto) {
-            clearPerLevelSettings();
-            Notification::create("Per-level settings cleared for this level", NotificationIcon::Info)->show();
-        });
-        resetBtn->setPosition({leftX + 60.f, top - step * 7.f});
-        menu->addChild(resetBtn);
+        R.toggle("Pre-Click Cue", "cue-sound", "Plays a heads-up sound a little BEFORE each click, so you know one is coming. Pick the sound below (it previews). How early and how loud are in Settings (Cue Lead, Cue Volume). Choose Custom and pick your own .ogg/.mp3/.wav in Settings.");
+        R.gap(6.f);
+        this->addCueSoundRow(m_pageNode, menu, {R.x + kNumOffset, R.y - 6.f});
+        R.gap(kNumberH);
+        R.number("Lane Look-Ahead", "lane-lookahead-ds", 3, 40, 1, "");
     }
-    else if (m_page == 2) {
-        this->addToggle(m_pageNode, menu, "Auto-Play", "autoplay", {leftX, top}, "The mod plays the macro for you so you can watch the clicks and the lane in sync. Your own clicks are ignored while it's on. Progress is never saved in auto-play.");
-        this->addNumberRow(m_pageNode, menu, "Auto-Play Speed %", "autoplay-speed-pct", 25, 100, 5, {leftX + 70.f, top - step * 1.5f}, nullptr, "%");
-        this->addToggle(m_pageNode, menu, "Count-In Beats", "count-in", {leftX, top - step * 3}, "Three soft ticks half a second apart before the first click after a restart or checkpoint.");
-        this->addToggle(m_pageNode, menu, "Progressive Assist", "progressive-assist", {leftX, top - step * 4}, "Every time you finish a run or section with no misses and at least the target accuracy, the assist strength drops by one.");
-        this->addNumberRow(m_pageNode, menu, "Clean Run Target %", "progressive-target", 50, 100, 5, {leftX + 70.f, top - step * 5.5f}, nullptr, "%");
+    else if (m_page == 2) { // Aim Assist
+        L.toggle("Aim Assist", "assist-enabled", "If you click EARLY, your click is held back and sent at the exact moment the macro clicked. Late clicks go through normally. At release strength 5 and up, letting go early does NOT end the hold. Also toggled by the Assist hotkey (F9 by default).");
+        L.toggle("Assist Flash", "assist-flash", "Flashes the lane receptor yellow and shows ASSIST whenever a click was corrected.");
+        L.toggle("Safe Mode", "assist-safe-mode", "While the assist is on, the level runs like a start-pos test so no percentage or completion is saved.");
+        L.toggle("Progressive Assist", "progressive-assist", "Every time you finish a run or section with no misses and at least the target accuracy, the assist strength drops by one.");
+        L.number("Clean Run Target %", "progressive-target", 50, 100, 5, "%");
 
-        this->addToggle(m_pageNode, menu, "Section Practice", "section-practice", {rightX, top}, "Drill one part of the level. In practice mode a checkpoint is placed when you reach the start percent, and the level restarts when you reach the end percent. Stats count the section.");
-        this->addNumberRow(m_pageNode, menu, "Section Start %", "section-start", 0, 99, 1, {rightX + 60.f, top - step * 1.5f}, nullptr, "%");
-        this->addNumberRow(m_pageNode, menu, "Section End %", "section-end", 0, 100, 1, {rightX + 60.f, top - step * 3.f}, nullptr, "%");
-        this->addLabel(m_pageNode, "End 0 or 100 = play to the end", {rightX + 60.f, top - step * 4.1f}, 0.4f);
-        this->addToggle(m_pageNode, menu, "Timeline", "timeline", {rightX, top - step * 5.f}, "A thin bar across the top with every click as a tick mark (red = trouble spot), your position, and the section markers.");
-        this->addToggle(m_pageNode, menu, "Pre-Click Cue", "cue-sound", {rightX, top - step * 6.f}, "Plays a heads-up sound a little BEFORE each click, so you know one is coming. Pick the sound with the arrows (it previews), and set how early and how loud in Settings (Cue Lead, Cue Volume). Choose Custom and pick your own .ogg/.mp3/.wav in Settings.");
-        this->addCueSoundRow(m_pageNode, menu, {leftX + 70.f, top - step * 6.6f});
+        R.number("Press Strength", "assist-strength", 1, 10, 1, "", &m_strengthLabel);
+        R.number("Release Strength", "assist-release-strength", 0, 10, 1, "", &m_releaseLabel);
+        R.number("Assist Off At %", "assist-off-percent", 0, 100, 5, "%");
+        R.number("Release Offset (ms)", "release-offset-ms", -50, 80, 2, "ms");
     }
-    else {
-        // Tools: recording + stats
-        this->addLabel(m_pageNode, "Record Your Own Macro", {kWidth / 2.f, top + 4.f}, 0.5f);
-        this->addLabel(m_pageNode, "Turn on, play in practice mode to 100% and it saves\nautomatically. Dying keeps the clicks from before the checkpoint.", {kWidth / 2.f, top - 20.f}, 0.42f);
+    else if (m_page == 3) { // Practice
+        L.toggle("Auto-Play", "autoplay", "The mod plays the macro for you so you can watch the clicks and the lane in sync. Your own clicks are ignored while it's on. Progress is never saved in auto-play.");
+        L.number("Auto-Play Speed %", "autoplay-speed-pct", 25, 100, 5, "%");
+        L.toggle("Section Practice", "section-practice", "Drill one part of the level. In practice mode a checkpoint is placed when you reach the start percent, and the level restarts when you reach the end percent. Stats count the section.");
+        L.number("Section Start %", "section-start", 0, 99, 1, "%");
+        L.number("Section End %", "section-end", 0, 100, 1, "%");
 
-        auto rec = CCMenuItemExt::createTogglerWithStandardSprites(0.75f, [this](CCMenuItemToggler* t) {
-            bool on = !t->isToggled();
-            setRecording(on);
-            this->updateStatus();
-            if (on) Notification::create("Recording: play to 100% in practice mode", NotificationIcon::Info)->show();
-        });
-        rec->toggle(isRecording());
-        rec->setPosition({leftX + 30.f, top - step * 1.9f});
-        menu->addChild(rec);
-        m_recordToggle = rec;
-        auto recLabel = CCLabelBMFont::create("Recording", "bigFont.fnt");
-        recLabel->setAnchorPoint({0.f, 0.5f});
-        recLabel->setScale(0.5f);
-        recLabel->setPosition({leftX + 50.f, top - step * 1.9f});
-        m_pageNode->addChild(recLabel, 10);
-
-        auto saveSpr = ButtonSprite::create("Save Now", "goldFont.fnt", "GJ_button_01.png", 0.6f);
-        auto saveBtn = CCMenuItemExt::createSpriteExtra(saveSpr, [this](auto) {
-            if (saveRecordingNow()) {
-                Notification::create("Click Indicator: macro saved", NotificationIcon::Success)->show();
+        R.toggle("Spam Assist", "spam-assist", "For wave and ship. Extra taps while the macro is holding are absorbed (the game keeps holding). While you hold, the game follows the macro's press/release pattern for up to Max Hold, so holding through a spam section plays the spam. Taps that match nothing are swallowed.");
+        R.number("Spam Max Hold (s)", "spam-follow-max-ds", 5, 50, 5, "");
+        R.number("Hold Slack (ms)", "hold-slack-ms", 0, 150, 5, "ms");
+        R.toggle("Per-Level Settings", "per-level", "Remembers the settings on these pages separately for every level.");
+    }
+    else { // Tools
+        L.toggle("Stats On Death", "stats-on-death", "Shows a short accuracy summary every time you die.");
+        L.toggle("Stats On Finish", "stats-on-complete", "Shows the full stats popup when you complete the level.");
+        L.toggle("Merge Recordings", "record-merge", "When a recording is saved over an existing macro with the same name, only the part you recorded is replaced. Record your best sections one at a time.");
+        L.gap(4.f);
+        // recording toggle (not a setting)
+        {
+            auto rec = CCMenuItemExt::createTogglerWithStandardSprites(0.7f, [this](CCMenuItemToggler* t) {
+                bool on = !t->isToggled();
+                setRecording(on);
                 this->updateStatus();
-            }
-            else if (recordedInputCount() == 0) {
-                Notification::create("Nothing recorded yet", NotificationIcon::Warning)->show();
-            }
-        });
-        saveBtn->setPosition({rightX + 60.f, top - step * 1.9f});
-        menu->addChild(saveBtn);
+                if (on) Notification::create("Recording: play to 100% in practice mode", NotificationIcon::Info)->show();
+            });
+            rec->toggle(isRecording());
+            rec->setPosition({L.x, L.y});
+            menu->addChild(rec);
+            m_recordToggle = rec;
+            auto recLabel = CCLabelBMFont::create("Record Macro", "bigFont.fnt");
+            recLabel->setAnchorPoint({0.f, 0.5f});
+            recLabel->setPosition({L.x + 18.f, L.y});
+            recLabel->limitLabelWidth(120.f, 0.45f, 0.2f);
+            m_pageNode->addChild(recLabel, 10);
+            auto infoSpr = CCSprite::createWithSpriteFrameName("GJ_infoIcon_001.png");
+            infoSpr->setScale(0.42f);
+            auto infoBtn = CCMenuItemExt::createSpriteExtra(infoSpr, [](auto) {
+                FLAlertLayer::create("Record Macro", "Turn on, play in practice mode to 100% and the macro saves automatically, named after the level. Dying keeps the clicks from before the checkpoint. Save Now writes what you have so far.", "OK")->show();
+            });
+            infoBtn->setPosition({L.x - 16.f, L.y + 11.f});
+            menu->addChild(infoBtn);
+            L.y -= kToggleH;
+        }
 
-        this->addLabel(m_pageNode, "Attempt Stats", {kWidth / 2.f, top - step * 3.2f}, 0.5f);
-        auto statsSpr = ButtonSprite::create("Show Stats", "goldFont.fnt", "GJ_button_01.png", 0.6f);
-        auto statsBtn = CCMenuItemExt::createSpriteExtra(statsSpr, [](auto) {
-            if (auto p = StatsPopup::create()) p->show();
+        R.button("Save Recording", [this](auto) {
+            if (saveRecordingNow()) { Notification::create("Click Indicator: macro saved", NotificationIcon::Success)->show(); this->updateStatus(); }
+            else if (recordedInputCount() == 0) Notification::create("Nothing recorded yet", NotificationIcon::Warning)->show();
         });
-        statsBtn->setPosition({kWidth / 2.f - 70.f, top - step * 4.2f});
-        menu->addChild(statsBtn);
-
-        auto clearSpr = ButtonSprite::create("Clear Trouble", "goldFont.fnt", "GJ_button_06.png", 0.6f);
-        auto clearBtn = CCMenuItemExt::createSpriteExtra(clearSpr, [](auto) {
+        R.button("Show Stats", [](auto) { if (auto p = StatsPopup::create()) p->show(); });
+        R.button("Clear Trouble Spots", [](auto) {
             clearTroubleForCurrentLevel();
             Notification::create("Trouble spots cleared for this level", NotificationIcon::Info)->show();
         });
-        clearBtn->setPosition({kWidth / 2.f + 70.f, top - step * 4.2f});
-        menu->addChild(clearBtn);
-        this->addToggle(m_pageNode, menu, "Stats On Death", "stats-on-death", {leftX, top - step * 5.3f}, "Shows a short accuracy summary every time you die.");
-        this->addToggle(m_pageNode, menu, "Stats On Finish", "stats-on-complete", {rightX, top - step * 5.3f}, "Shows the full stats popup when you complete the level.");
-        this->addToggle(m_pageNode, menu, "Merge Recordings", "record-merge", {rightX, top - step * 1.9f + 14.f}, "When a recording is saved over an existing macro with the same name, only the part you recorded is replaced. Record your best sections one at a time.");
+        R.button("Reset Level Prefs", [](auto) {
+            clearPerLevelSettings();
+            Notification::create("Per-level settings cleared for this level", NotificationIcon::Info)->show();
+        });
 
-        // macro editing row
-        this->addLabel(m_pageNode, "Edit Macro", {kWidth / 2.f, top - step * 6.4f + 2.f}, 0.5f);
+        // macro editing row along the bottom of the content area
+        float ey = 86.f;
+        auto title = CCLabelBMFont::create("Edit Macro:", "bigFont.fnt");
+        title->setScale(0.38f);
+        title->setAnchorPoint({0.f, 0.5f});
+        title->setPosition({kLeftX - 8.f, ey});
+        m_pageNode->addChild(title, 10);
         auto mkBtn = [&](char const* text, float x, auto cb) {
-            auto spr = ButtonSprite::create(text, "goldFont.fnt", "GJ_button_04.png", 0.5f);
+            auto spr = ButtonSprite::create(text, "goldFont.fnt", "GJ_button_04.png", 0.45f);
             auto btn = CCMenuItemExt::createSpriteExtra(spr, cb);
-            btn->setPosition({x, top - step * 7.3f});
+            btn->setPosition({x, ey});
             menu->addChild(btn);
         };
-        mkBtn("-5ms", kWidth / 2.f - 150.f, [this](auto) { if (shiftCurrentMacro(-5)) this->updateStatus(); else Notification::create("Open a level with a macro first", NotificationIcon::Info)->show(); });
-        mkBtn("+5ms", kWidth / 2.f - 90.f, [this](auto) { if (shiftCurrentMacro(5)) this->updateStatus(); else Notification::create("Open a level with a macro first", NotificationIcon::Info)->show(); });
-        mkBtn("Trim Before Here", kWidth / 2.f - 5.f, [this](auto) {
+        mkBtn("-5ms", 120.f, [this](auto) { if (shiftCurrentMacro(-5)) this->updateStatus(); else Notification::create("Open a level with a macro first", NotificationIcon::Info)->show(); });
+        mkBtn("+5ms", 168.f, [this](auto) { if (shiftCurrentMacro(5)) this->updateStatus(); else Notification::create("Open a level with a macro first", NotificationIcon::Info)->show(); });
+        mkBtn("Trim Before", 236.f, [this](auto) {
             if (trimCurrentMacroHere()) { Notification::create("Removed clicks before this point", NotificationIcon::Info)->show(); this->updateStatus(); }
             else Notification::create("Open a level with a macro first", NotificationIcon::Info)->show();
         });
-        mkBtn("Save Edited", kWidth / 2.f + 85.f, [](auto) {
+        mkBtn("Save Edited", 316.f, [](auto) {
             auto f = saveEditedMacro();
             if (!f.empty()) Notification::create("Saved " + f, NotificationIcon::Success)->show();
         });
-        mkBtn("Export .gdr2", kWidth / 2.f + 160.f, [](auto) {
+        mkBtn("To .gdr2", 388.f, [](auto) {
             auto f = exportCurrentMacroGdr2();
             if (!f.empty()) Notification::create("Exported " + f, NotificationIcon::Success)->show();
         });
@@ -426,7 +453,7 @@ void ClickMenu::addToggle(CCNode* parent, CCMenu* menu, char const* text, char c
     auto label = CCLabelBMFont::create(text, "bigFont.fnt");
     label->setAnchorPoint({0.f, 0.5f});
     label->setPosition({pos.x + 18.f, pos.y});
-    label->limitLabelWidth(120.f, 0.45f, 0.2f);
+    label->limitLabelWidth(140.f, 0.42f, 0.2f);
     parent->addChild(label, 10);
 
     if (info) {
@@ -437,7 +464,7 @@ void ClickMenu::addToggle(CCNode* parent, CCMenu* menu, char const* text, char c
         auto infoBtn = CCMenuItemExt::createSpriteExtra(infoSpr, [title, desc](auto) {
             FLAlertLayer::create(title.c_str(), desc, "OK")->show();
         });
-        infoBtn->setPosition({pos.x - 16.f, pos.y + 11.f});
+        infoBtn->setPosition({pos.x - 16.f, pos.y + 10.f});
         menu->addChild(infoBtn);
     }
 }
@@ -456,7 +483,7 @@ void ClickMenu::addChoiceToggle(CCNode* parent, CCMenu* menu, char const* text, 
     auto label = CCLabelBMFont::create(text, "bigFont.fnt");
     label->setAnchorPoint({0.f, 0.5f});
     label->setPosition({pos.x + 18.f, pos.y});
-    label->limitLabelWidth(120.f, 0.45f, 0.2f);
+    label->limitLabelWidth(140.f, 0.42f, 0.2f);
     parent->addChild(label, 10);
 
     if (info) {
@@ -467,19 +494,20 @@ void ClickMenu::addChoiceToggle(CCNode* parent, CCMenu* menu, char const* text, 
         auto infoBtn = CCMenuItemExt::createSpriteExtra(infoSpr, [title, desc](auto) {
             FLAlertLayer::create(title.c_str(), desc, "OK")->show();
         });
-        infoBtn->setPosition({pos.x - 16.f, pos.y + 11.f});
+        infoBtn->setPosition({pos.x - 16.f, pos.y + 10.f});
         menu->addChild(infoBtn);
     }
 }
 
 void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, char const* settingKey, int64_t lo, int64_t hi, int64_t step, CCPoint pos, CCLabelBMFont** labelOut, char const* suffix) {
     auto title = CCLabelBMFont::create(text, "bigFont.fnt");
-    title->setScale(0.38f);
-    title->setPosition({pos.x, pos.y + 11.f});
+    title->setScale(0.36f);
+    title->limitLabelWidth(130.f, 0.36f, 0.2f);
+    title->setPosition({pos.x, pos.y + 10.f});
     parent->addChild(title, 10);
 
     auto value = CCLabelBMFont::create("", "bigFont.fnt");
-    value->setScale(0.4f);
+    value->setScale(0.38f);
     value->setPosition({pos.x, pos.y - 7.f});
     parent->addChild(value, 10);
     if (labelOut) *labelOut = value;
@@ -487,17 +515,20 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
     std::string key = settingKey, suf = suffix;
     bool speedPct = key == "autoplay-speed-pct";
     bool followDs = key == "spam-follow-max-ds";
-    bool isFloat = key == "release-offset-ms";
-    auto getV = [key, speedPct, followDs, isFloat]() -> int64_t {
+    bool isFloat = key == "release-offset-ms" || key == "hold-slack-ms";
+    bool lookDs = key == "lane-lookahead-ds";
+    auto getV = [key, speedPct, followDs, isFloat, lookDs]() -> int64_t {
         if (speedPct) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>("autoplay-speed") * 100.0));
         if (followDs) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>("spam-follow-max") * 10.0));
         if (isFloat) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>(key)));
+        if (lookDs) return static_cast<int64_t>(std::llround(Mod::get()->getSettingValue<double>("lane-lookahead") * 10.0));
         return Mod::get()->getSettingValue<int64_t>(key);
     };
-    auto setV = [key, speedPct, followDs, isFloat](int64_t v) {
+    auto setV = [key, speedPct, followDs, isFloat, lookDs](int64_t v) {
         if (speedPct) Mod::get()->setSettingValue<double>("autoplay-speed", v / 100.0);
         else if (followDs) Mod::get()->setSettingValue<double>("spam-follow-max", v / 10.0);
         else if (isFloat) Mod::get()->setSettingValue<double>(key, static_cast<double>(v));
+        else if (lookDs) Mod::get()->setSettingValue<double>("lane-lookahead", v / 10.0);
         else Mod::get()->setSettingValue<int64_t>(key, v);
     };
     auto refresh = [key, suf, value, getV]() {
@@ -506,13 +537,13 @@ void ClickMenu::addNumberRow(CCNode* parent, CCMenu* menu, char const* text, cha
         if (key == "assist-strength" || (key == "assist-release-strength" && v > 0)) {
             s += fmt::format(" ({:.0f}ms)", ClickOverlay::assistWindowFor(static_cast<int>(v)) * 1000.0);
         }
-        else if (key == "spam-follow-max-ds") s = fmt::format("{:.1f} s", v / 10.0);
+        else if (key == "spam-follow-max-ds" || key == "lane-lookahead-ds") s = fmt::format("{:.1f} s", v / 10.0);
         else if (key == "release-offset-ms") s = fmt::format("{:+d} ms", static_cast<int>(v));
         else if (key == "assist-release-strength") s = "same as press";
         else if (v == 0 && key != "section-start" && key != "autoplay-speed-pct") s = "never";
         else if (v == 0 && key == "section-start") s = "from start";
         value->setString(s.c_str());
-        value->limitLabelWidth(90.f, 0.4f, 0.2f);
+        value->limitLabelWidth(84.f, 0.38f, 0.2f);
     };
     refresh();
 
@@ -540,18 +571,19 @@ void ClickMenu::addCueSoundRow(CCNode* parent, CCMenu* menu, CCPoint pos) {
     constexpr int kCount = 8;
 
     auto title = CCLabelBMFont::create("Cue Sound", "bigFont.fnt");
-    title->setScale(0.38f);
-    title->setPosition({pos.x, pos.y + 11.f});
+    title->setScale(0.36f);
+    title->limitLabelWidth(130.f, 0.36f, 0.2f);
+    title->setPosition({pos.x, pos.y + 10.f});
     parent->addChild(title, 10);
 
     auto value = CCLabelBMFont::create("", "bigFont.fnt");
-    value->setScale(0.4f);
+    value->setScale(0.38f);
     value->setPosition({pos.x, pos.y - 7.f});
     parent->addChild(value, 10);
 
     auto refresh = [value]() {
         value->setString(Mod::get()->getSettingValue<std::string>("cue-sound-type").c_str());
-        value->limitLabelWidth(90.f, 0.4f, 0.2f);
+        value->limitLabelWidth(84.f, 0.38f, 0.2f);
     };
     refresh();
 
@@ -588,7 +620,7 @@ void ClickMenu::addCueSoundRow(CCNode* parent, CCMenu* menu, CCPoint pos) {
             refresh();
             preview();
         });
-        btn->setPosition({pos.x + (right ? 62.f : -62.f), pos.y - 7.f});
+        btn->setPosition({pos.x + (right ? 58.f : -58.f), pos.y - 7.f});
         menu->addChild(btn);
     };
     makeArrow(false);
@@ -597,7 +629,7 @@ void ClickMenu::addCueSoundRow(CCNode* parent, CCMenu* menu, CCPoint pos) {
     auto playSpr = CCSprite::createWithSpriteFrameName("GJ_playMusicBtn_001.png");
     playSpr->setScale(0.45f);
     auto playBtn = CCMenuItemExt::createSpriteExtra(playSpr, [=](auto) { preview(); });
-    playBtn->setPosition({pos.x + 88.f, pos.y - 7.f});
+    playBtn->setPosition({pos.x + 84.f, pos.y - 7.f});
     menu->addChild(playBtn);
 }
 
