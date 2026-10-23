@@ -315,6 +315,7 @@ void ClickMenu::buildPage() {
         R.toggle("Timeline", "timeline", "A thin bar across the top with every click as a tick mark (red = trouble spot), your position, and the section markers.");
         R.toggle("Practice Only", "only-practice", "Only show the indicator in practice mode.");
         R.number("Hide Overlay At %", "hide-after-percent", 0, 100, 5, "%");
+        R.toggle("Per-Level Settings", "per-level", "Remembers the settings on these pages separately for every level.");
     }
     else if (m_page == 1) { // Lane & Sound
         L.toggle("Rhythm Lane", "show-lane", "The osu!mania-style lane with falling notes.");
@@ -349,10 +350,11 @@ void ClickMenu::buildPage() {
         L.number("Section Start %", "section-start", 0, 99, 1, "%");
         L.number("Section End %", "section-end", 0, 100, 1, "%");
 
-        R.toggle("Spam Assist", "spam-assist", "For wave and ship. Extra taps while the macro is holding are absorbed (the game keeps holding). While you hold, the game follows the macro's press/release pattern for up to Max Hold, so holding through a spam section plays the spam. Taps that match nothing are swallowed.");
-        R.number("Spam Max Hold (s)", "spam-follow-max-ds", 5, 50, 5, "");
+        R.toggle("Absorb Spam In Holds", "spam-assist", "Extra taps while the macro is holding a long hold (120 ms+) are absorbed, so the game keeps holding.");
+        R.toggle("Follow While Held", "spam-follow", "While you keep holding, the game follows the macro's press/release pattern for up to Max Hold. Strong: holding through a spam section plays the spam. Off by default.");
+        R.toggle("Swallow Stray Taps", "spam-swallow", "Taps that match nothing in the macro (nothing within 150 ms) are not sent to the game. Off by default.");
+        R.number("Follow Max Hold (s)", "spam-follow-max-ds", 5, 50, 5, "");
         R.number("Hold Slack (ms)", "hold-slack-ms", 0, 150, 5, "ms");
-        R.toggle("Per-Level Settings", "per-level", "Remembers the settings on these pages separately for every level.");
     }
     else { // Tools
         L.toggle("Stats On Death", "stats-on-death", "Shows a short accuracy summary every time you die.");

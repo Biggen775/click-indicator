@@ -167,6 +167,8 @@ void ClickOverlay::loadSettings() {
     m_assistParams.releaseWindow = assistWindowFor(relStrength);
     m_assistParams.followHold = relStrength >= 5;
     m_assistParams.spam = mod->getSettingValue<bool>("spam-assist");
+    m_assistParams.follow = mod->getSettingValue<bool>("spam-follow");
+    m_assistParams.swallowStray = mod->getSettingValue<bool>("spam-swallow");
     m_assistParams.followMax = mod->getSettingValue<double>("spam-follow-max");
     m_assistParams.followGap = mod->getSettingValue<double>("spam-follow-gap");
     m_assistParams.releaseOffset = mod->getSettingValue<double>("release-offset-ms") / 1000.0;
@@ -414,7 +416,7 @@ bool ClickOverlay::assistOnPress(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
     if (!this->assistActive(pl) && !a.busy()) return false;
     AssistEngine::Params prm = m_assistParams;
-    if (!this->assistActive(pl)) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.followHold = false; }
+    if (!this->assistActive(pl)) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.follow = false; prm.swallowStray = false; prm.followHold = false; }
     bool wasDown = a.gameDown();
     bool sentNow = false;
     a.onPress(m_macro.presses, p2, this->currentTime(pl), prm, [&](bool down) {
@@ -429,7 +431,7 @@ bool ClickOverlay::assistOnRelease(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
     if (!this->assistActive(pl) && !a.busy()) return false;
     AssistEngine::Params prm = m_assistParams;
-    if (!this->assistActive(pl)) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.followHold = false; }
+    if (!this->assistActive(pl)) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.follow = false; prm.swallowStray = false; prm.followHold = false; }
     bool sentNow = false;
     a.onRelease(m_macro.presses, p2, this->currentTime(pl), prm, [&](bool down) {
         if (m_fire) m_fire(down, p2);

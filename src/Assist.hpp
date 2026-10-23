@@ -28,7 +28,9 @@ public:
         double pressWindow = 0.02;
         double releaseWindow = 0.02;
         bool followHold = false;
-        bool spam = false;
+        bool spam = false;          // absorb extra taps while the macro holds (safe, on by default)
+        bool follow = false;        // pattern-follow while physically held (opt-in)
+        bool swallowStray = false;  // swallow taps that match nothing (opt-in)
         double followMax = 2.0;
         double followGap = 0.4;
         double releaseOffset = 0.0;
@@ -46,6 +48,7 @@ public:
         m_swallow = false;
         m_following = false;
         m_absorbed = false;
+        m_plain = false;
     }
 
     bool gameDown() const { return m_gameDown; }
@@ -59,9 +62,11 @@ public:
         m_physDownAt = now;
         m_swallow = false;
         m_following = false;
+        m_plain = false;
 
         // already attached to a macro press the game is holding (re-press during a hold)
-        if (m_anchor >= 0 && m_gameDown && this->endOf(presses, m_anchor, prm) > now + kEps) {
+        if (prm.spam && m_anchor >= 0 && m_gameDown && this->endOf(presses, m_anchor, prm) > now + kEps &&
+            presses[m_anchor].end - presses[m_anchor].start > 0.12) {
             m_absorbed = true;
             return true; // absorbed, the game keeps holding
         }
@@ -73,11 +78,13 @@ public:
             // near a macro press but outside the strength window: a plain click for that press
             int nearIdx = this->findMatch(presses, p2, now, std::max(prm.pressWindow, kStrayWindow));
             if (nearIdx >= 0) {
+                // the player's own click, sent now; the anchor only serves the release window
                 m_anchor = nearIdx;
+                m_plain = true;
                 this->set(true, fire);
                 return true; // (we sent it ourselves)
             }
-            if (prm.spam) {
+            if (prm.swallowStray) {
                 m_swallow = true; // stray tap
                 m_anchor = -1;
                 return true;
@@ -108,9 +115,7 @@ public:
     void evaluate(std::vector<Press> const& presses, bool p2, double now, Params const& prm, F&& fire) {
         if (m_anchor < 0) {
             // nothing attached: the game simply mirrors the player (minus swallowed taps)
-            bool want = m_physDown && !m_swallow;
-            if (!prm.spam || !m_physDown) this->set(want, fire);
-            else if (!want) this->set(false, fire);
+            this->set(m_physDown && !m_swallow, fire);
             return;
         }
         if (m_anchor >= static_cast<int>(presses.size())) { m_anchor = -1; this->set(m_physDown, fire); return; }
@@ -120,10 +125,10 @@ public:
         double end = this->endOf(presses, m_anchor, prm);
 
         if (m_physDown) {
-            if (now < start) { this->set(false, fire); return; }                 // early: wait
+            if (now < start && !m_plain) { this->set(false, fire); return; }     // early: wait
             if (now < end - kEps) { this->set(true, fire); return; }             // inside the hold
             // past the macro's release while still holding
-            if (prm.spam && now - m_physDownAt <= prm.followMax) {
+            if (prm.follow && now - m_physDownAt <= prm.followMax) {
                 int next = this->nextPress(presses, p2, m_anchor);
                 double gap = next >= 0 ? presses[next].start - p.end : 1e300;
                 // grace for your own slightly-late release, only on a lone release (nothing to follow)
@@ -141,7 +146,7 @@ public:
                 m_swallow = true; // the rest of this physical hold is ignored
                 return;
             }
-            // no spam assist: the hold is the player's own from here
+            // no pattern-follow: the hold is the player's own from here
             this->set(true, fire);
             m_anchor = -1;
             return;
@@ -162,7 +167,8 @@ public:
             return;
         }
         // game is holding, player isn't: hold to the macro's end if allowed
-        bool keep = now < end - kEps && (prm.followHold || end - now <= prm.releaseWindow);
+        // a plain (unsnapped) click only gets the release window, never the full follow-hold
+        bool keep = now < end - kEps && ((prm.followHold && !m_plain) || end - now <= prm.releaseWindow);
         if (keep) return;
         this->set(false, fire);
         m_anchor = -1;
@@ -182,6 +188,7 @@ private:
     bool m_swallow = false;
     bool m_following = false;
     bool m_absorbed = false;
+    bool m_plain = false;
     double m_physDownAt = 0.0;
     int m_anchor = -1;
     int m_lastFired = -1; // last macro press whose press was actually sent
@@ -216,6 +223,19 @@ private:
             int idx = static_cast<int>(it - presses.begin());
             if (it->p2 != p2 || (idx <= m_lastFired && idx != m_anchor)) continue;
             double dist = std::abs(it->start - now);
+            // in dense sections only claim a tap that is clearly closer to this press than to its neighbours
+            double limit = window;
+            for (int j = idx - 1; j >= 0; j--) {
+                if (presses[j].p2 != p2) continue;
+                limit = std::min(limit, (it->start - presses[j].start) * 0.4);
+                break;
+            }
+            for (int j = idx + 1; j < static_cast<int>(presses.size()); j++) {
+                if (presses[j].p2 != p2) continue;
+                limit = std::min(limit, (presses[j].start - it->start) * 0.4);
+                break;
+            }
+            if (dist > std::max(limit, 0.006)) continue;
             if (best < 0 || dist < bestDist) {
                 best = idx;
                 bestDist = dist;
