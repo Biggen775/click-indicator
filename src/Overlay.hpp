@@ -47,8 +47,17 @@ public:
 
     // ---- Aim assist ----
     bool assistActive(PlayLayer* pl) const;
+    // Why the assist is not acting right now ("" when it is active, or the assist is turned off)
+    std::string assistInactiveReason(PlayLayer* pl) const;
+    // What the assist did with the last real input (for the diagnostic log)
+    std::string const& lastAssistNote() const { return m_assistNote; }
     bool assistOnPress(PlayLayer* pl, bool p2);
     bool assistOnRelease(PlayLayer* pl, bool p2);
+    // Level percent from the player's position (the game's own percent is attempt-relative
+    // when playing from a start pos, which made every percent-based option misfire there)
+    static float levelPercent(PlayLayer* pl);
+    // Practice mode or playing from a start pos
+    static bool practicing(PlayLayer* pl);
     void assistTick(PlayLayer* pl, std::function<void(bool down, bool p2)> const& fire);
     void setFire(std::function<void(bool down, bool p2)> fire) { m_fire = std::move(fire); }
     static double assistWindowFor(int strength);
@@ -135,10 +144,11 @@ private:
     bool m_assistOn = false;
     float m_assistOffPercent = 0.f;
     float m_assistFlashTimer = 0.f;
+    std::string m_assistNote;
 
-    // autoplay
+    // autoplay: index of the macro press each player is holding (-1 = not holding)
     size_t m_autoCursor = 0;
-    bool m_autoHeld[2] = {false, false};
+    int m_autoHeld[2] = {-1, -1};
     bool m_autoResync = true;
     // offset trail: offsets from the previous attempt, by press index
     std::vector<float> m_lastOffsets;

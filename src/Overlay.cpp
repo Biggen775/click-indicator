@@ -12,6 +12,10 @@ namespace {
     constexpr double kJudgeWindow = 0.15;  // seconds: max distance to count a click as "for" a macro press
     constexpr float kJudgeShowTime = 0.7f; // seconds the judgment text stays up
     constexpr double kBadMs = 45.0;        // worse than GREAT counts as a bad attempt for trouble spots
+    // Macro times are exact tick times of the level clock. An input is due on the first tick
+    // whose clock reads >= that time; this only absorbs floating point noise, not a fraction
+    // of a tick (that used to fire everything half a tick early with physics bypass on).
+    constexpr double kTickTol = 1e-6;
 
     ccColor4F toColor4F(ccColor4B c) {
         return ccc4FFromccc4B(c);
@@ -298,48 +302,46 @@ void ClickOverlay::autoplayTick(PlayLayer* pl, std::function<void(bool, bool)> c
     bool active = this->autoplayActive(pl);
     if (!active) {
         for (int p = 0; p < 2; p++) {
-            if (m_autoHeld[p]) { m_autoHeld[p] = false; fire(false, p == 1); }
+            if (m_autoHeld[p] >= 0) { m_autoHeld[p] = -1; fire(false, p == 1); }
         }
         m_autoResync = true;
         return;
     }
-    double now = this->currentTime(pl) + 0.5 / m_macro.framerate;
+    // Macro times are tick times: a press is due on the first tick whose clock reads >= start.
+    double now = this->currentTime(pl) + kTickTol;
     auto& presses = m_macro.presses;
 
     if (m_autoResync) {
         m_autoResync = false;
         m_autoCursor = 0;
         while (m_autoCursor < presses.size() && presses[m_autoCursor].start <= now) m_autoCursor++;
-        // inside a hold right now? press it
+        // inside a hold right now? press it (latest press per player that is still going)
         for (size_t i = m_autoCursor; i-- > 0;) {
-            if (presses[i].start > now - 5.0) {
-                int p = presses[i].p2 ? 1 : 0;
-                if (presses[i].end > now && !m_autoHeld[p]) { m_autoHeld[p] = true; fire(true, presses[i].p2); }
-            }
-            else break;
+            if (presses[i].start < now - 5.0) break;
+            int p = presses[i].p2 ? 1 : 0;
+            if (m_autoHeld[p] < 0 && presses[i].end > now) { m_autoHeld[p] = static_cast<int>(i); fire(true, presses[i].p2); }
         }
     }
 
-    // releases that are due
-    for (size_t i = m_autoCursor; i-- > 0;) {
-        if (presses[i].start < now - 5.0) break;
-        int p = presses[i].p2 ? 1 : 0;
-        if (m_autoHeld[p] && presses[i].end <= now && presses[i].end > now - 0.2) {
-            // only release if no later press for this player is already holding
-            m_autoHeld[p] = false;
-            fire(false, presses[i].p2);
+    // releases that are due: only the press that is actually being held can release it
+    for (int p = 0; p < 2; p++) {
+        int h = m_autoHeld[p];
+        if (h < 0) continue;
+        if (h >= static_cast<int>(presses.size()) || presses[h].end <= now) {
+            m_autoHeld[p] = -1;
+            fire(false, p == 1);
         }
     }
     // presses that are due
     while (m_autoCursor < presses.size() && presses[m_autoCursor].start <= now) {
         auto const& pr = presses[m_autoCursor];
         int p = pr.p2 ? 1 : 0;
-        if (pr.end > now) {
-            if (!m_autoHeld[p]) { m_autoHeld[p] = true; fire(true, pr.p2); }
-        }
-        else if (pr.start > now - 0.2) {
-            // a whole tap inside one tick: press now, release next tick
-            if (!m_autoHeld[p]) { m_autoHeld[p] = true; fire(true, pr.p2); }
+        if (pr.start > now - 0.25) {
+            // a new press while the previous one is still held (adjacent presses): let go first
+            if (m_autoHeld[p] >= 0) fire(false, pr.p2);
+            m_autoHeld[p] = static_cast<int>(m_autoCursor);
+            fire(true, pr.p2);
+            // a tap shorter than a tick is released on the next tick by the loop above
         }
         m_autoCursor++;
     }
@@ -347,7 +349,7 @@ void ClickOverlay::autoplayTick(PlayLayer* pl, std::function<void(bool, bool)> c
 
 bool ClickOverlay::sectionEndReached(PlayLayer* pl) {
     if (m_set.sectionEnd <= 0.f || m_set.sectionEnd >= 100.f) return false;
-    float pct = pl->getCurrentPercent();
+    float pct = levelPercent(pl);
     if (pct < m_set.sectionEnd - 2.f) m_sectionArmedEnd = true;
     if (m_sectionArmedEnd && pct >= m_set.sectionEnd) {
         m_sectionArmedEnd = false;
@@ -358,7 +360,7 @@ bool ClickOverlay::sectionEndReached(PlayLayer* pl) {
 
 bool ClickOverlay::sectionWantsCheckpoint(PlayLayer* pl) {
     if (m_set.sectionStart <= 0.f || !pl->m_isPracticeMode) return false;
-    float pct = pl->getCurrentPercent();
+    float pct = levelPercent(pl);
     if (pct < m_set.sectionStart - 2.f) m_sectionArmedStart = true;
     if (m_sectionArmedStart && pct >= m_set.sectionStart) {
         m_sectionArmedStart = false;
@@ -396,11 +398,28 @@ double ClickOverlay::assistWindowFor(int strength) {
     return ms / 1000.0;
 }
 
+float ClickOverlay::levelPercent(PlayLayer* pl) {
+    if (!pl) return 0.f;
+    if (pl->m_isPlatformer || pl->m_levelLength <= 1.f || !pl->m_player1) return pl->getCurrentPercent();
+    return std::clamp(pl->m_player1->getPositionX() / pl->m_levelLength * 100.f, 0.f, 100.f);
+}
+
+bool ClickOverlay::practicing(PlayLayer* pl) {
+    return pl && (pl->m_isPracticeMode || pl->m_startPosObject != nullptr);
+}
+
+std::string ClickOverlay::assistInactiveReason(PlayLayer* pl) const {
+    if (!m_assistOn) return "";
+    if (!m_enabled) return "indicator is off";
+    if (pl->m_isPlatformer) return "platformer level";
+    if (m_macro.presses.empty()) return "macro has no clicks";
+    if (m_onlyPractice && !practicing(pl)) return "practice only";
+    if (m_assistOffPercent > 0.f && levelPercent(pl) >= m_assistOffPercent) return fmt::format("past {:.0f}%", m_assistOffPercent);
+    return "";
+}
+
 bool ClickOverlay::assistActive(PlayLayer* pl) const {
-    if (!m_assistOn || !m_enabled || pl->m_isPlatformer || m_macro.presses.empty()) return false;
-    if (m_onlyPractice && !pl->m_isPracticeMode) return false;
-    if (m_assistOffPercent > 0.f && pl->getCurrentPercent() >= m_assistOffPercent) return false;
-    return true;
+    return m_assistOn && this->assistInactiveReason(pl).empty();
 }
 
 void ClickOverlay::onAssisted(bool p2) {
@@ -414,29 +433,48 @@ void ClickOverlay::onAssisted(bool p2) {
 
 bool ClickOverlay::assistOnPress(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
-    if (!this->assistActive(pl) && !a.busy()) return false;
+    bool active = this->assistActive(pl);
+    if (!active && !a.busy()) {
+        m_assistNote = m_assistOn ? "inactive: " + this->assistInactiveReason(pl) : "assist off";
+        return false;
+    }
     AssistEngine::Params prm = m_assistParams;
-    if (!this->assistActive(pl)) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.follow = false; prm.swallowStray = false; prm.followHold = false; }
+    if (!active) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.follow = false; prm.swallowStray = false; prm.followHold = false; }
     bool wasDown = a.gameDown();
     bool sentNow = false;
-    a.onPress(m_macro.presses, p2, this->currentTime(pl), prm, [&](bool down) {
+    double now = this->currentTime(pl);
+    a.onPress(m_macro.presses, p2, now, prm, [&](bool down) {
         if (m_fire) m_fire(down, p2);
         sentNow = true;
     });
+    m_assistNote = fmt::format("press {} anchor={} window={:.0f}ms", a.lastAction(), a.anchor(), prm.pressWindow * 1000.0);
+    if (a.anchor() >= 0 && a.anchor() < static_cast<int>(m_macro.presses.size())) {
+        m_assistNote += fmt::format(" dStart={:+.4f}", now - m_macro.presses[a.anchor()].start);
+    }
     if (!sentNow || a.gameDown() == wasDown) this->onAssisted(p2);
     return true; // the engine sends the game input itself
 }
 
 bool ClickOverlay::assistOnRelease(PlayLayer* pl, bool p2) {
     auto& a = m_assist[p2 ? 1 : 0];
-    if (!this->assistActive(pl) && !a.busy()) return false;
+    bool active = this->assistActive(pl);
+    if (!active && !a.busy()) {
+        m_assistNote = m_assistOn ? "inactive: " + this->assistInactiveReason(pl) : "assist off";
+        return false;
+    }
     AssistEngine::Params prm = m_assistParams;
-    if (!this->assistActive(pl)) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.follow = false; prm.swallowStray = false; prm.followHold = false; }
+    if (!active) { prm.pressWindow = 0.0; prm.releaseWindow = 0.0; prm.spam = false; prm.follow = false; prm.swallowStray = false; prm.followHold = false; }
     bool sentNow = false;
-    a.onRelease(m_macro.presses, p2, this->currentTime(pl), prm, [&](bool down) {
+    double now = this->currentTime(pl);
+    int anchorBefore = a.anchor();
+    a.onRelease(m_macro.presses, p2, now, prm, [&](bool down) {
         if (m_fire) m_fire(down, p2);
         sentNow = true;
     });
+    m_assistNote = fmt::format("release {} anchor={} gameDown={}", a.lastAction(), anchorBefore, a.gameDown() ? 1 : 0);
+    if (anchorBefore >= 0 && anchorBefore < static_cast<int>(m_macro.presses.size())) {
+        m_assistNote += fmt::format(" dEnd={:+.4f}", now - m_macro.presses[anchorBefore].end);
+    }
     if (!sentNow) this->onAssisted(p2);
     return true;
 }
@@ -449,8 +487,7 @@ void ClickOverlay::assistTick(PlayLayer* pl, std::function<void(bool, bool)> con
         if (!a.busy()) continue;
         bool p2 = p == 1;
         auto send = [&](bool down) { fire(down, p2); };
-        // half a tick of tolerance so a click due on this tick is never pushed to the next one
-        if (active) a.evaluate(m_macro.presses, p2, this->currentTime(pl) + 0.5 / m_macro.framerate, m_assistParams, send);
+        if (active) a.evaluate(m_macro.presses, p2, this->currentTime(pl) + kTickTol, m_assistParams, send);
         else a.flush(send);
     }
 }
@@ -770,7 +807,7 @@ void ClickOverlay::showJudgment(char const* text, ccColor3B color, std::optional
 }
 
 bool ClickOverlay::pastHidePercent(PlayLayer* pl) const {
-    return m_set.hideAfterPercent > 0.f && pl->getCurrentPercent() >= m_set.hideAfterPercent;
+    return m_set.hideAfterPercent > 0.f && levelPercent(pl) >= m_set.hideAfterPercent;
 }
 
 // ---------------------------------------------------------------------------
@@ -778,7 +815,7 @@ bool ClickOverlay::pastHidePercent(PlayLayer* pl) const {
 // ---------------------------------------------------------------------------
 
 void ClickOverlay::refresh(PlayLayer* pl, float dt) {
-    bool visible = m_enabled && (!m_onlyPractice || pl->m_isPracticeMode);
+    bool visible = m_enabled && (!m_onlyPractice || practicing(pl));
     if (!m_prepared) this->prepare(pl);
 
     m_now = this->currentTime(pl);
@@ -845,7 +882,23 @@ void ClickOverlay::refresh(PlayLayer* pl, float dt) {
     }
     if (m_assistFlashTimer > 0.f) m_assistFlashTimer -= dt;
     {
+        // steady status while the assist is turned on, so you can see whether it is really
+        // acting ("ASSIST" dim) or sitting out and why ("ASSIST OFF: practice only"), and a
+        // bright flash each time it corrects an input
         float alpha = std::clamp(m_assistFlashTimer / 0.3f, 0.f, 1.f);
+        if (m_assistOn) {
+            std::string reason = this->assistInactiveReason(pl);
+            std::string text = reason.empty() ? "ASSIST" : "ASSIST OFF: " + reason;
+            if (text != m_assistLabel->getString()) m_assistLabel->setString(text.c_str());
+            if (reason.empty()) {
+                m_assistLabel->setColor({255, 220, 60});
+                alpha = std::max(alpha, 0.45f);
+            }
+            else {
+                m_assistLabel->setColor({255, 90, 70});
+                alpha = 0.85f;
+            }
+        }
         m_assistLabel->setOpacity(static_cast<GLubyte>(alpha * 255));
         if (!m_set.showLane) m_assistLabel->setPosition({win.width / 2.f, win.height - 40.f});
     }

@@ -135,8 +135,9 @@ namespace {
         auto& gs = pl->m_gameState;
         float x = pl->m_player1 ? pl->m_player1->getPositionX() : 0.f;
         float y = pl->m_player1 ? pl->m_player1->getPositionY() : 0.f;
-        return fmt::format("lt={:.5f} prog={} tick={} x={:.2f} y={:.2f} pct={:.2f} tw={:.3f}",
-            gs.m_levelTime, gs.m_currentProgress, TickClock::inTick() ? 1 : 0, x, y, pl->getCurrentPercent(), gs.m_timeWarp);
+        return fmt::format("lt={:.5f} prog={} tick={} x={:.2f} y={:.2f} pct={:.2f} lpct={:.2f} tw={:.3f}",
+            gs.m_levelTime, gs.m_currentProgress, TickClock::inTick() ? 1 : 0, x, y, pl->getCurrentPercent(),
+            ClickOverlay::levelPercent(pl), gs.m_timeWarp);
     }
 }
 
@@ -252,15 +253,20 @@ class $modify(CIPlayLayer, PlayLayer) {
         Diag::get().setEnabled(Mod::get()->getSettingValue<bool>("diag-log"));
         if (auto overlay = m_fields->overlay) {
             auto const& m = overlay->getMacro();
-            Diag::get().line("LEVEL", fmt::format("name='{}' id={} macro='{}' framerate={} presses={} practice={} testmode={} posTable={} modver={}",
+            Diag::get().line("LEVEL", fmt::format("name='{}' id={} macro='{}' framerate={} presses={} practice={} testmode={} startpos={} length={:.0f} posTable={} modver={}",
                 std::string(level->m_levelName), level->m_levelID.value(), m.fileName, m.framerate, m.presses.size(),
-                m_isPracticeMode ? 1 : 0, m_isTestMode ? 1 : 0, overlay->usesPositions() ? 1 : 0, Mod::get()->getVersion().toVString()));
-            Diag::get().line("SETTINGS", fmt::format("assist={} strength={} relStrength={} spam={} follow={} swallow={} relOffset={} slack={} offset={} autoplay={}",
-                Mod::get()->getSettingValue<bool>("assist-enabled"), Mod::get()->getSettingValue<int64_t>("assist-strength"),
-                Mod::get()->getSettingValue<int64_t>("assist-release-strength"), Mod::get()->getSettingValue<bool>("spam-assist"),
-                Mod::get()->getSettingValue<bool>("spam-follow"), Mod::get()->getSettingValue<bool>("spam-swallow"),
-                Mod::get()->getSettingValue<double>("release-offset-ms"), Mod::get()->getSettingValue<double>("hold-slack-ms"),
-                Mod::get()->getSettingValue<double>("offset-ms"), Mod::get()->getSettingValue<bool>("autoplay")));
+                m_isPracticeMode ? 1 : 0, m_isTestMode ? 1 : 0, m_startPosObject ? 1 : 0, m_levelLength,
+                overlay->usesPositions() ? 1 : 0, Mod::get()->getVersion().toVString()));
+            auto mod = Mod::get();
+            Diag::get().line("SETTINGS", fmt::format("enabled={} onlyPractice={} perLevel={} assist={} strength={} relStrength={} safe={} offPct={} spam={} follow={} swallow={} relOffset={} slack={} offset={} autoplay={} hideAfter={} assistReason='{}'",
+                mod->getSettingValue<bool>("enabled"), mod->getSettingValue<bool>("only-practice"), mod->getSettingValue<bool>("per-level"),
+                mod->getSettingValue<bool>("assist-enabled"), mod->getSettingValue<int64_t>("assist-strength"),
+                mod->getSettingValue<int64_t>("assist-release-strength"), mod->getSettingValue<bool>("assist-safe-mode"),
+                mod->getSettingValue<int64_t>("assist-off-percent"), mod->getSettingValue<bool>("spam-assist"),
+                mod->getSettingValue<bool>("spam-follow"), mod->getSettingValue<bool>("spam-swallow"),
+                mod->getSettingValue<double>("release-offset-ms"), mod->getSettingValue<double>("hold-slack-ms"),
+                mod->getSettingValue<double>("offset-ms"), mod->getSettingValue<bool>("autoplay"),
+                mod->getSettingValue<int64_t>("hide-after-percent"), overlay->assistInactiveReason(this)));
             for (size_t i = 0; i < std::min<size_t>(m.presses.size(), 400); i++) {
                 Diag::get().line("MACRO", fmt::format("{} {:.5f} {:.5f} p2={}", i, m.presses[i].start, m.presses[i].end, m.presses[i].p2 ? 1 : 0));
             }
@@ -566,8 +572,8 @@ namespace {
             r.platformer = m.platformer;
             r.gameVersion = 22081;
             for (auto const& p : m.presses) {
-                r.inputs.push_back({static_cast<uint64_t>(std::llround(std::max(0.0, p.start) * m.framerate)), 1, p.p2, true});
-                r.inputs.push_back({static_cast<uint64_t>(std::llround(std::max(0.0, p.end) * m.framerate)), 1, p.p2, false});
+                r.inputs.push_back({frameForTime(p.start, m.framerate), 1, p.p2, true});
+                r.inputs.push_back({frameForTime(p.end, m.framerate), 1, p.p2, false});
             }
             r.sortInputs();
             r.duration = m.presses.empty() ? 0.f : static_cast<float>(m.presses.back().end);
@@ -646,11 +652,12 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         if (button == 1 && !s_assistFiring && inPlayLayer && s_recording) {
             s_recorder.add(static_cast<CIPlayLayer*>(pl)->recordClock(), down, !isPlayer1);
         }
-        if (button == 1 && inPlayLayer && Diag::get().enabled()) {
+        bool diag = button == 1 && inPlayLayer && Diag::get().enabled();
+        if (diag) {
             auto ov = static_cast<CIPlayLayer*>(pl)->m_fields->overlay.data();
             double clock = ov ? ov->currentTime(pl) : TickClock::now(m_gameState.m_levelTime);
-            Diag::get().line(s_assistFiring ? "FIRED" : "INPUT", fmt::format("{} {} clock={:.5f} nearest[{}]",
-                down ? "DOWN" : "UP", gameStateText(pl), clock, ov ? ov->nearestInfo(clock, !isPlayer1) : std::string("none")));
+            Diag::get().line(s_assistFiring ? "FIRED" : "INPUT", fmt::format("{} {} {} clock={:.5f} nearest[{}]",
+                down ? "DOWN" : "UP", isPlayer1 ? "p1" : "p2", gameStateText(pl), clock, ov ? ov->nearestInfo(clock, !isPlayer1) : std::string("none")));
         }
 
         auto overlay = button == 1 && !s_assistFiring && inPlayLayer ? static_cast<CIPlayLayer*>(pl)->m_fields->overlay.data() : nullptr;
@@ -669,6 +676,7 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
             s_assistFiring = false;
         });
         bool handled = down ? overlay->assistOnPress(pl, p2) : overlay->assistOnRelease(pl, p2);
+        if (diag) Diag::get().line("ASSIST", fmt::format("{} {}", handled ? "handled" : "passed", overlay->lastAssistNote()));
         if (!handled) {
             GJBaseGameLayer::handleButton(down, button, isPlayer1);
         }

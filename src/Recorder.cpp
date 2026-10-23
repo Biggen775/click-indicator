@@ -1,4 +1,5 @@
 #include "Recorder.hpp"
+#include "Macro.hpp"
 
 #include <Geode/utils/file.hpp>
 #include <matjson.hpp>
@@ -33,7 +34,9 @@ Result<> Recorder::save(std::filesystem::path const& path, std::string const& le
     bool held[2] = {false, false};
     for (auto const& in : m_inputs) {
         auto j = matjson::Value::object();
-        j.set("frame", matjson::Value(static_cast<std::intmax_t>(std::llround(in.t * framerate))));
+        // frame: the number other bots give this input; t: the exact clock reading (ours)
+        j.set("frame", matjson::Value(static_cast<std::intmax_t>(frameForTime(in.t, framerate))));
+        j.set("t", matjson::Value(in.t));
         j.set("btn", matjson::Value(static_cast<std::intmax_t>(1)));
         j.set("2p", matjson::Value(in.p2));
         j.set("down", matjson::Value(in.down));
@@ -44,7 +47,9 @@ Result<> Recorder::save(std::filesystem::path const& path, std::string const& le
     for (int p = 0; p < 2; p++) {
         if (!held[p]) continue;
         auto j = matjson::Value::object();
-        j.set("frame", matjson::Value(static_cast<std::intmax_t>(std::llround(m_inputs.back().t * framerate) + 10)));
+        double t = m_inputs.back().t + 10.0 / framerate;
+        j.set("frame", matjson::Value(static_cast<std::intmax_t>(frameForTime(t, framerate))));
+        j.set("t", matjson::Value(t));
         j.set("btn", matjson::Value(static_cast<std::intmax_t>(1)));
         j.set("2p", matjson::Value(p == 1));
         j.set("down", matjson::Value(false));

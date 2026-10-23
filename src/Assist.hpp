@@ -37,7 +37,10 @@ public:
         double holdSlack = 0.04;
     };
 
-    static constexpr double kEps = 0.0005;
+    // floating point noise only: macro times are exact tick times, a release is due on the tick
+    // whose clock reads the macro's release time (was half a millisecond, which with physics
+    // bypass on fired releases a sub-step early)
+    static constexpr double kEps = 1e-6;
     static constexpr double kStrayWindow = 0.15;
 
     void reset() {
@@ -49,10 +52,14 @@ public:
         m_following = false;
         m_absorbed = false;
         m_plain = false;
+        m_lastAction = "reset";
     }
 
     bool gameDown() const { return m_gameDown; }
     bool busy() const { return m_gameDown || m_anchor >= 0; }
+    int anchor() const { return m_anchor; }
+    // What the last onPress / onRelease decided (for the diagnostic log)
+    char const* lastAction() const { return m_lastAction; }
 
     // Real press. Returns true if the game should NOT get this press right now
     // (evaluate() will send it at the right moment, or never).
@@ -68,6 +75,7 @@ public:
         if (prm.spam && m_anchor >= 0 && m_gameDown && this->endOf(presses, m_anchor, prm) > now + kEps &&
             presses[m_anchor].end - presses[m_anchor].start > 0.12) {
             m_absorbed = true;
+            m_lastAction = "absorbed";
             return true; // absorbed, the game keeps holding
         }
         m_absorbed = false;
@@ -81,20 +89,24 @@ public:
                 // the player's own click, sent now; the anchor only serves the release window
                 m_anchor = nearIdx;
                 m_plain = true;
+                m_lastAction = "plain";
                 this->set(true, fire);
                 return true; // (we sent it ourselves)
             }
             if (prm.swallowStray) {
                 m_swallow = true; // stray tap
                 m_anchor = -1;
+                m_lastAction = "stray-swallowed";
                 return true;
             }
             m_anchor = -1;
+            m_lastAction = "stray";
             this->set(true, fire);
             return true;
         }
 
         m_anchor = match;
+        m_lastAction = now < presses[match].start ? "early-wait" : "matched";
         this->evaluate(presses, p2, now, prm, fire);
         return true;
     }
@@ -104,9 +116,12 @@ public:
         m_physDown = false;
         if (m_swallow) {
             m_swallow = false;
+            m_lastAction = "swallowed";
             return true;
         }
+        bool wasDown = m_gameDown;
         this->evaluate(presses, p2, now, prm, fire);
+        m_lastAction = !wasDown ? "pending" : m_gameDown ? "kept-holding" : "released";
         return true;
     }
 
@@ -192,6 +207,7 @@ private:
     double m_physDownAt = 0.0;
     int m_anchor = -1;
     int m_lastFired = -1; // last macro press whose press was actually sent
+    char const* m_lastAction = "reset";
 
     template <class F>
     void set(bool down, F&& fire) {

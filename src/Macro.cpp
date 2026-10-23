@@ -17,6 +17,7 @@ namespace {
 
 struct RawInput {
     uint64_t frame = 0;
+    double time = -1.0; // exact level-clock time in seconds when the file has one (our own recordings)
     int button = 1;
     bool p2 = false;
     bool down = false;
@@ -199,6 +200,7 @@ Result<RawMacro> fromJson(matjson::Value const& root) {
 
         RawInput r;
         r.frame = static_cast<uint64_t>(std::max(0.0, frame->asDouble().unwrapOr(0)));
+        if (auto t = findKey(in, {"t"}); t && t->isNumber()) r.time = t->asDouble().unwrapOr(-1.0);
         r.down = boolOr(findKey(in, {"down", "holding", "press", "pressed"}), false);
         r.p2 = boolOr(findKey(in, {"2p", "p2", "player2", "player_2"}), false);
         r.button = static_cast<int>(numberOr(findKey(in, {"btn", "button"}), 1));
@@ -218,7 +220,7 @@ Result<RawMacro> fromGdr2(std::span<uint8_t> data) {
     m.levelID = replay.levelInfo.id;
     m.levelName = replay.levelInfo.name;
     for (auto const& in : replay.inputs) {
-        m.inputs.push_back({in.frame, static_cast<int>(in.button), in.player2, in.down});
+        m.inputs.push_back({in.frame, -1.0, static_cast<int>(in.button), in.player2, in.down});
     }
     return Ok(std::move(m));
 }
@@ -236,7 +238,12 @@ void buildPresses(RawMacro& raw, Macro& out) {
         if (in.button != 1) continue;
 
         int p = in.p2 ? 1 : 0;
-        double t = static_cast<double>(in.frame) / raw.framerate;
+        // Bots (xdBot, GDR) stamp an input with frame = int(levelTime * fps) + 1 at the moment
+        // it is handled, so frame F happened on the tick whose clock read (F - 1) / fps.
+        // Our own recordings also carry the exact clock reading, which replays sub-tick exact
+        // when physics bypass runs the level at more than 240 steps a second.
+        double t = in.time >= 0.0 ? in.time
+            : static_cast<double>(in.frame > 0 ? in.frame - 1 : 0) / raw.framerate;
 
         if (in.down) {
             if (!down[p]) {

@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-// One click from the macro: the button goes down at `start` and up at `end`
-// (both in seconds since the start of the attempt).
+// One click from the macro: the button goes down at `start` and up at `end`.
+// Both are level-clock (m_levelTime) readings of the tick the input was handled on, in seconds.
 struct Press {
     double start = 0.0;
     double end = 0.0;
@@ -33,3 +33,10 @@ struct Macro {
 
 // Loads .gdr (msgpack), .gdr.json / .json and .gdr2 (binary) macros.
 geode::Result<Macro> loadMacro(std::filesystem::path const& path);
+
+// The frame number bots give an input handled when the level clock read `t`
+// (xdBot / GDR convention: int(levelTime * fps) + 1).
+inline uint64_t frameForTime(double t, double fps) {
+    if (t <= 0.0) return 1;
+    return static_cast<uint64_t>(t * fps + 1e-6) + 1;
+}

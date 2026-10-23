@@ -314,7 +314,7 @@ void ClickMenu::buildPage() {
         R.toggle("Judgments", "show-judgments", "Shows PERFECT / GREAT / GOOD / MISS and how many ms early or late you clicked.");
         R.toggle("Offset Trail", "offset-trail", "A dot on each lane note shows how early or late you were: yellow = this attempt, white = last attempt.");
         R.toggle("Timeline", "timeline", "A thin bar across the top with every click as a tick mark (red = trouble spot), your position, and the section markers.");
-        R.toggle("Practice Only", "only-practice", "Only show the indicator in practice mode.");
+        R.toggle("Practice Only", "only-practice", "Only show the indicator (and let Aim Assist act) in practice mode or from a start pos. If Aim Assist seems to do nothing, make sure this is off or you are practicing.");
         R.number("Hide Overlay At %", "hide-after-percent", 0, 100, 5, "%");
         R.toggle("Per-Level Settings", "per-level", "Remembers the settings on these pages separately for every level.");
     }
