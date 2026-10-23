@@ -1,3 +1,14 @@
+# v2.3.6
+
+From your second log (xdBot 1440 TPS macro with assist at strength 8, plus auto-play of your own recording):
+
+- **Early clicks 65-130 ms before a macro click were being passed straight through** ("stray") instead of being held back, at strength 8 (215 ms window). A rule from v2.3.3 only matched a click if it was closer to that macro click than 40% of the gap to the neighbouring clicks; with clicks ~200 ms apart that cut the window to ~80 ms. Now a click is matched to the nearest macro click that has not been played yet, within the full window.
+- **Release strength 5+ now lines up late releases too.** When you are still holding at the macro's release, the game lets go exactly when the macro does (the rest of that physical hold is ignored, your next press works normally). Before, a late release went through late. Hold Slack default is now 0.
+- **Re-pressing while the game is still holding a matched click no longer releases it early.** The hold is kept to its macro release and the new press is played at its own macro time.
+- **Recordings made before v2.3.5 play on the right tick again.** They used round() frame numbering; the new tick convention made them one tick early (your TS2 auto-play dying at the same spot every run). Old files are detected and read the old way; new recordings carry exact times.
+- **TPS warning.** The macro you tested was recorded at 1440 TPS and the game was running 240: inputs can only land on 240 Hz ticks, so every click and release is up to 4 ms off no matter what. A warning at the bottom of the screen now tells you when the game's TPS and the macro's don't match.
+- Assist / auto-play inputs go straight to the game's own input handler (like the bots do), so other mods' input hooks never see them.
+
 # v2.3.5
 
 Found from the diagnostic log you sent:

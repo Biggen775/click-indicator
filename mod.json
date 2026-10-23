@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.3.5",
+	"version": "v2.3.6",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -227,7 +227,7 @@
 		"assist-enabled": {
 			"type": "bool",
 			"name": "Aim Assist",
-			"description": "If you click <cy>early</c>, the click is held back and sent at the exact moment the macro clicked. Late clicks go through normally. At strength <cg>5</c> and up, letting go early does not end the hold: it keeps holding until the macro lets go.",
+			"description": "If you click <cy>early</c>, the click is held back and sent at the exact moment the macro clicked. Late clicks go through normally. At strength <cg>5</c> and up your release is lined up too: the game lets go exactly when the macro does, whether you let go a little early or a little late.",
 			"default": false
 		},
 		"assist-strength": {
@@ -251,7 +251,7 @@
 		"assist-release-strength": {
 			"type": "int",
 			"name": "Release Strength",
-			"description": "Separate strength for letting go. <cg>0</c> = same as the press strength. 5 and up: an early release never ends the hold.",
+			"description": "Separate strength for letting go. <cg>0</c> = same as the press strength. 5 and up: the macro's release is the release, whether you let go early or late.",
 			"default": 0,
 			"min": 0,
 			"max": 10,
@@ -335,8 +335,8 @@
 		"hold-slack-ms": {
 			"type": "float",
 			"name": "Hold Slack (ms)",
-			"description": "If you are still holding when the macro lets go, the assist waits this long for your own release before releasing for you. Only applies to presses you made yourself, not to the spam pattern-follow.",
-			"default": 40,
+			"description": "Release strength 5+: when you are still holding at the macro's release, the assist lets go for you. This adds a few ms of grace before it does. Keep it at 0 for wave and ship.",
+			"default": 0,
 			"min": 0,
 			"max": 150,
 			"control": {
