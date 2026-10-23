@@ -532,6 +532,21 @@ double ClickOverlay::timeForX(float x) const {
     return (static_cast<double>(i) + frac) * m_tableStep;
 }
 
+std::string ClickOverlay::nearestInfo(double t, bool p2) const {
+    int best = -1;
+    double bestD = 0.0;
+    for (size_t i = 0; i < m_macro.presses.size(); i++) {
+        auto const& p = m_macro.presses[i];
+        if (p.p2 != p2) continue;
+        double d = std::abs(p.start - t);
+        if (best < 0 || d < bestD) { best = static_cast<int>(i); bestD = d; }
+        if (p.start > t + 2.0) break;
+    }
+    if (best < 0) return "none";
+    auto const& p = m_macro.presses[best];
+    return fmt::format("idx={} start={:.4f} end={:.4f} dStart={:+.4f} dEnd={:+.4f}", best, p.start, p.end, t - p.start, t - p.end);
+}
+
 double ClickOverlay::currentTime(PlayLayer* pl) {
     // The game's own level clock: this is what macro bots (xdBot, Eclipse, ...) count their
     // frames from, so timing here lines up with the macro exactly. Position-based timing

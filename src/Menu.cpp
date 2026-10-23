@@ -19,6 +19,7 @@ namespace {
     void settingChanged() {
         refreshOverlaySettings();
         savePerLevelSettings();
+        setDiagEnabled(Mod::get()->getSettingValue<bool>("diag-log"));
     }
 
     // Stats popup: text + a bar chart of accuracy per attempt
@@ -400,6 +401,14 @@ void ClickMenu::buildPage() {
         R.button("Reset Level Prefs", [](auto) {
             clearPerLevelSettings();
             Notification::create("Per-level settings cleared for this level", NotificationIcon::Info)->show();
+        });
+
+        // diagnostics
+        L.toggle("Diagnostic Log", "diag-log", "Writes diag.log (every click, every assisted click, positions, clocks, deaths) so timing problems can be read off a file. Turn on, play the problem spot, then use Open Log Folder and send the file.");
+        R.button("Open Log Folder", [](auto) {
+            std::error_code ec;
+            std::filesystem::create_directories(diagPath().parent_path(), ec);
+            utils::file::openFolder(diagPath().parent_path());
         });
 
         // macro editing row along the bottom of the content area

@@ -11,6 +11,7 @@
 #include "Recorder.hpp"
 #include "Shared.hpp"
 #include "TickClock.hpp"
+#include "Diag.hpp"
 
 #include <gdr/gdr.hpp>
 
@@ -129,6 +130,16 @@ double s_recordTime = 0.0; // level time at the last reset (to drop inputs after
 
 } // namespace
 
+namespace {
+    std::string gameStateText(PlayLayer* pl) {
+        auto& gs = pl->m_gameState;
+        float x = pl->m_player1 ? pl->m_player1->getPositionX() : 0.f;
+        float y = pl->m_player1 ? pl->m_player1->getPositionY() : 0.f;
+        return fmt::format("lt={:.5f} prog={} tick={} x={:.2f} y={:.2f} pct={:.2f} tw={:.3f}",
+            gs.m_levelTime, gs.m_currentProgress, TickClock::inTick() ? 1 : 0, x, y, pl->getCurrentPercent(), gs.m_timeWarp);
+    }
+}
+
 std::filesystem::path macroFolder() {
     return Mod::get()->getSettingValue<std::filesystem::path>("macro-folder");
 }
@@ -147,6 +158,7 @@ class $modify(CIPlayLayer, PlayLayer) {
         bool statsShown = false;
         bool speedApplied = false;
         bool tutorialShown = false;
+        bool deadLogged = false;
     };
 
     // Slow motion while auto-play is on
@@ -237,6 +249,26 @@ class $modify(CIPlayLayer, PlayLayer) {
         this->updateSpeed();
         s_recorder.clear();
 
+        Diag::get().setEnabled(Mod::get()->getSettingValue<bool>("diag-log"));
+        if (auto overlay = m_fields->overlay) {
+            auto const& m = overlay->getMacro();
+            Diag::get().line("LEVEL", fmt::format("name='{}' id={} macro='{}' framerate={} presses={} practice={} testmode={} posTable={} modver={}",
+                std::string(level->m_levelName), level->m_levelID.value(), m.fileName, m.framerate, m.presses.size(),
+                m_isPracticeMode ? 1 : 0, m_isTestMode ? 1 : 0, overlay->usesPositions() ? 1 : 0, Mod::get()->getVersion().toVString()));
+            Diag::get().line("SETTINGS", fmt::format("assist={} strength={} relStrength={} spam={} follow={} swallow={} relOffset={} slack={} offset={} autoplay={}",
+                Mod::get()->getSettingValue<bool>("assist-enabled"), Mod::get()->getSettingValue<int64_t>("assist-strength"),
+                Mod::get()->getSettingValue<int64_t>("assist-release-strength"), Mod::get()->getSettingValue<bool>("spam-assist"),
+                Mod::get()->getSettingValue<bool>("spam-follow"), Mod::get()->getSettingValue<bool>("spam-swallow"),
+                Mod::get()->getSettingValue<double>("release-offset-ms"), Mod::get()->getSettingValue<double>("hold-slack-ms"),
+                Mod::get()->getSettingValue<double>("offset-ms"), Mod::get()->getSettingValue<bool>("autoplay")));
+            for (size_t i = 0; i < std::min<size_t>(m.presses.size(), 400); i++) {
+                Diag::get().line("MACRO", fmt::format("{} {:.5f} {:.5f} p2={}", i, m.presses[i].start, m.presses[i].end, m.presses[i].p2 ? 1 : 0));
+            }
+        }
+        else {
+            Diag::get().line("LEVEL", fmt::format("name='{}' id={} macro=NONE err='{}'", std::string(level->m_levelName), level->m_levelID.value(), m_fields->lastError));
+        }
+
         if (m_fields->overlay && !Mod::get()->getSavedValue<bool>("tutorial-shown", false)) {
             Mod::get()->setSavedValue<bool>("tutorial-shown", true);
             FLAlertLayer::create(
@@ -255,6 +287,26 @@ class $modify(CIPlayLayer, PlayLayer) {
         PlayLayer::postUpdate(dt);
         if (auto overlay = m_fields->overlay) {
             overlay->refresh(this, dt);
+
+            if (Diag::get().enabled()) {
+                static double s_lastSample = -1.0;
+                double lt = m_gameState.m_levelTime;
+                if (s_lastSample < 0.0 || lt - s_lastSample >= 0.5 || lt < s_lastSample) {
+                    s_lastSample = lt;
+                    Diag::get().line("SAMPLE", fmt::format("{} dt={:.5f} barX(lt)={:.2f} xDelta={:.2f} clock={:.5f}",
+                        gameStateText(this), dt, overlay->barXForTime(lt), overlay->xDelta(), overlay->currentTime(this)));
+                }
+                if (m_player1 && m_player1->m_isDead) {
+                    if (!m_fields->deadLogged) {
+                        m_fields->deadLogged = true;
+                        Diag::get().line("DEATH", fmt::format("{} nearest[{}] clock={:.5f}", gameStateText(this), overlay->nearestInfo(overlay->currentTime(this), false), overlay->currentTime(this)));
+                        Diag::get().flush();
+                    }
+                }
+                else {
+                    m_fields->deadLogged = false;
+                }
+            }
 
             if (Mod::get()->getSettingValue<bool>("section-practice") && !m_hasCompletedLevel) {
                 if (overlay->sectionWantsCheckpoint(this) && m_checkpointArray && m_checkpointArray->count() == 0) {
@@ -292,6 +344,10 @@ class $modify(CIPlayLayer, PlayLayer) {
 
         PlayLayer::resetLevel();
 
+        if (Diag::get().enabled()) {
+            Diag::get().line("RESET", fmt::format("{} checkpoints={}", gameStateText(this), m_checkpointArray ? m_checkpointArray->count() : 0));
+        }
+
         if (auto overlay = fields->overlay) overlay->onReset();
         this->updateSafeMode();
         this->updateSpeed();
@@ -310,6 +366,8 @@ class $modify(CIPlayLayer, PlayLayer) {
     void levelComplete() {
         PlayLayer::levelComplete();
         auto fields = m_fields.self();
+        Diag::get().line("COMPLETE", gameStateText(this));
+        Diag::get().flush();
 
         if (s_recording && !s_recorder.empty()) {
             if (saveRecordingNow()) {
@@ -328,6 +386,8 @@ class $modify(CIPlayLayer, PlayLayer) {
     }
 
     void onQuit() {
+        Diag::get().line("QUIT", gameStateText(this));
+        Diag::get().flush();
         if (m_fields->speedApplied) CCScheduler::get()->setTimeScale(1.f);
         if (auto overlay = m_fields->overlay) overlay->saveTrouble();
         s_recording = false;
@@ -586,6 +646,12 @@ class $modify(CIBaseGameLayer, GJBaseGameLayer) {
         if (button == 1 && !s_assistFiring && inPlayLayer && s_recording) {
             s_recorder.add(static_cast<CIPlayLayer*>(pl)->recordClock(), down, !isPlayer1);
         }
+        if (button == 1 && inPlayLayer && Diag::get().enabled()) {
+            auto ov = static_cast<CIPlayLayer*>(pl)->m_fields->overlay.data();
+            double clock = ov ? ov->currentTime(pl) : TickClock::now(m_gameState.m_levelTime);
+            Diag::get().line(s_assistFiring ? "FIRED" : "INPUT", fmt::format("{} {} clock={:.5f} nearest[{}]",
+                down ? "DOWN" : "UP", gameStateText(pl), clock, ov ? ov->nearestInfo(clock, !isPlayer1) : std::string("none")));
+        }
 
         auto overlay = button == 1 && !s_assistFiring && inPlayLayer ? static_cast<CIPlayLayer*>(pl)->m_fields->overlay.data() : nullptr;
         if (!overlay) {
@@ -696,3 +762,11 @@ class $modify(CIKeyboard, CCKeyboardDispatcher) {
         return CCKeyboardDispatcher::dispatchKeyboardMSG(key, isKeyDown, isKeyRepeat, time);
     }
 };
+
+void setDiagEnabled(bool on) {
+    Mod::get()->setSettingValue<bool>("diag-log", on);
+    Diag::get().setEnabled(on);
+}
+bool diagEnabled() { return Diag::get().enabled(); }
+std::filesystem::path diagPath() { return Diag::get().path(); }
+void clearDiag() { Diag::get().clearFile(); }

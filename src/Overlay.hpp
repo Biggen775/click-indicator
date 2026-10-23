@@ -55,6 +55,13 @@ public:
 
     double currentTime(PlayLayer* pl);
 
+    // Diagnostics: "idx=12 start=3.4167 end=3.5000 dStart=-0.0083" for the macro press nearest to t
+    std::string nearestInfo(double t, bool p2) const;
+    // Diagnostics: where the bars put time t in the level (with the live correction)
+    float barXForTime(double t) const { return m_usePositions ? this->xForTime(t) + (m_xDeltaValid ? m_xDelta : 0.f) : -1.f; }
+    float xDelta() const { return m_xDeltaValid ? m_xDelta : 0.f; }
+    bool usesPositions() const { return m_usePositions; }
+
     // ---- Auto-play (bot) ----
     bool autoplayActive(PlayLayer* pl) const;
     // Called every tick: fires the macro's own presses/releases. fire(down, p2)

@@ -37,3 +37,9 @@ bool trimCurrentMacroHere();
 std::string saveEditedMacro();        // returns the file name written, or ""
 std::string exportCurrentMacroGdr2(); // returns the file name written, or ""
 std::vector<double> attemptHistory();
+
+// Diagnostics
+void setDiagEnabled(bool on);
+bool diagEnabled();
+std::filesystem::path diagPath();
+void clearDiag();
