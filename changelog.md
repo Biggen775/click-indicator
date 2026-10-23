@@ -1,3 +1,7 @@
+# v2.3.7
+
+- **Eclipse macros recorded from a start pos now line up.** Eclipse counts such a macro's time from the start pos, not from the level start, so its clicks showed up at the beginning of the level and nothing matched where you were playing. When you play from a start pos, a macro that begins right away and is shorter than the rest of the level is now treated as a start-pos recording and shifted to that start pos (a notification tells you). Wrong guess? Tools > Macro From Start Pos, or the Macro Starts At setting (Auto / Start Pos / Level Start).
+
 # v2.3.6
 
 From your second log (xdBot 1440 TPS macro with assist at strength 8, plus auto-play of your own recording):

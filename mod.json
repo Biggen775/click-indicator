@@ -6,7 +6,7 @@
 	},
 	"id": "brittj.click-indicator",
 	"name": "Click Indicator",
-	"version": "v2.3.6",
+	"version": "v2.3.7",
 	"developer": "brittj",
 	"description": "Shows a macro's clicks as osu!mania-style bars in the level and a rhythm lane.",
 	"tags": [
@@ -126,6 +126,13 @@
 				"slider": true,
 				"slider-step": 1
 			}
+		},
+		"macro-start": {
+			"type": "string",
+			"name": "Macro Starts At",
+			"description": "Where a macro's time 0 is when you play from a start pos. <cg>Auto</c>: a macro that begins right away and is shorter than the rest of the level is treated as recorded from the start pos (that is how Eclipse saves start-pos recordings); a macro that runs to the end is a full run. <cy>Start Pos</c> / <cy>Level Start</c> force it.",
+			"default": "Auto",
+			"one-of": ["Auto", "Start Pos", "Level Start"]
 		},
 		"only-practice": {
 			"type": "bool",
